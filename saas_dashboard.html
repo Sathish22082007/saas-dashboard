@@ -1,0 +1,2862 @@
+<!DOCTYPE html>
+<html lang="en" class="antialiased">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SaaS Dashboard - Admin Panel</title>
+  <meta name="description" content="Modern SaaS admin dashboard with analytics, user management, and data visualization">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%234f46e5'/%3E%3Ctext x='50' y='65' font-size='50' text-anchor='middle' fill='white'%3E📊%3C/text%3E%3C/svg%3E">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          },
+          colors: {
+            primary: {
+              50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc',
+              400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca',
+              800: '#3730a3', 900: '#312e81'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    :root {
+      --bg-primary: #ffffff; --bg-secondary: #f8fafc; --bg-tertiary: #f1f5f9;
+      --text-primary: #0f172a; --text-secondary: #64748b; --text-muted: #94a3b8;
+      --border: #e2e8f0; --primary: #4f46e5; --primary-hover: #4338ca;
+    }
+    .dark {
+      --bg-primary: #0f172a; --bg-secondary: #1e293b; --bg-tertiary: #334155;
+      --text-primary: #f8fafc; --text-secondary: #94a3b8; --text-muted: #64748b;
+      --border: #334155; --primary: #6366f1; --primary-hover: #818cf8;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+    @keyframes slideOutRight { from { transform: translateX(0); } to { transform: translateX(100%); } }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+    .animate-slide-up { animation: slideUp 0.4s ease-out; }
+    .animate-slide-in { animation: slideInRight 0.3s ease-out; }
+    .animate-slide-out { animation: slideOutRight 0.3s ease-in forwards; }
+    .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    .animate-spin { animation: spin 1s linear infinite; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    .dark ::-webkit-scrollbar-thumb { background: #475569; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    }
+    @media print { .no-print { display: none !important; } body { background: white !important; } }
+    .chart-container { position: relative; height: 300px; width: 100%; }
+    .skeleton { background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%); background-size: 200% 100%; animation: skeleton-loading 1.5s infinite; }
+    .dark .skeleton { background: linear-gradient(90deg, #334155 25%, #475569 50%, #334155 75%); background-size: 200% 100%; }
+    @keyframes skeleton-loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    .toast-enter { transform: translateX(100%); opacity: 0; }
+    .toast-enter-active { transform: translateX(0); opacity: 1; transition: all 0.3s ease-out; }
+    .toast-exit { transform: translateX(0); opacity: 1; }
+    .toast-exit-active { transform: translateX(100%); opacity: 0; transition: all 0.3s ease-in; }
+    .modal-backdrop { backdrop-filter: blur(4px); }
+    input:focus, textarea:focus, select:focus { outline: none; }
+    .password-strength-weak { background: #ef4444; }
+    .password-strength-medium { background: #f59e0b; }
+    .password-strength-strong { background: #10b981; }
+  </style>
+</head>
+<body class="font-sans text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-900 min-h-screen">
+  <div id="app"></div>
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+  <div id="modal-container" class="fixed inset-0 z-50 pointer-events-none"></div>
+
+<script>
+// ==================== MOCK DATA GENERATION ====================
+const firstNames = ["James","Mary","John","Patricia","Robert","Jennifer","Michael","Linda","William","Elizabeth","David","Barbara","Richard","Susan","Joseph","Jessica","Thomas","Sarah","Charles","Karen","Christopher","Nancy","Daniel","Lisa","Matthew","Betty","Anthony","Margaret","Mark","Sandra","Donald","Ashley","Steven","Kimberly","Paul","Emily","Andrew","Donna","Joshua","Michelle","Kenneth","Dorothy","Kevin","Carol","Brian","Amanda","George","Melissa","Edward","Deborah","Ronald","Stephanie","Timothy","Rebecca","Jason","Sharon","Jeffrey","Laura","Ryan","Cynthia","Jacob","Kathleen","Gary","Amy","Nicholas","Shirley","Eric","Angela","Jonathan","Helen","Stephen","Anna","Larry","Brenda","Justin","Pamela","Scott","Nicole","Brandon","Emma","Benjamin","Samantha","Samuel","Katherine","Gregory","Christine","Frank","Debra","Alexander","Rachel","Raymond","Catherine","Patrick","Carolyn","Jack","Janet","Dennis","Ruth","Jerry","Maria"];
+const lastNames = ["Smith","Johnson","Williams","Brown","Jones","Garcia","Miller","Davis","Rodriguez","Martinez","Hernandez","Lopez","Gonzalez","Wilson","Anderson","Thomas","Taylor","Moore","Jackson","Martin","Lee","Perez","Thompson","White","Harris","Sanchez","Clark","Ramirez","Lewis","Robinson","Walker","Young","Allen","King","Wright","Scott","Torres","Nguyen","Hill","Flores","Green","Adams","Nelson","Baker","Hall","Rivera","Campbell","Mitchell","Carter","Roberts","Gomez","Phillips","Evans","Turner","Diaz","Parker","Cruz","Edwards","Collins","Reyes","Stewart","Morris","Morales","Murphy","Cook","Rogers","Gutierrez","Ortiz","Morgan","Cooper","Peterson","Bailey","Reed","Kelly","Howard","Ramos","Kim","Cox","Ward","Richardson","Watson","Brooks","Chavez","Wood","James","Bennett","Gray","Mendoza","Ruiz","Hughes","Price","Alvarez","Castillo","Sanders"];
+const domains = ["gmail.com","yahoo.com","outlook.com","hotmail.com","icloud.com","protonmail.com","techcorp.com","innovate.io","startup.xyz","enterprise.co","digital.agency","cloud.net","solutions.dev","consulting.biz","ventures.tech"];
+const roles = ["admin","editor","user"];
+const roleWeights = [0.1, 0.2, 0.7];
+const statuses = ["active","inactive","pending"];
+const statusWeights = [0.8, 0.15, 0.05];
+const plans = ["free","pro","enterprise"];
+const planWeights = [0.5, 0.35, 0.15];
+const timezones = ["America/New_York","America/Chicago","America/Denver","America/Los_Angeles","Europe/London","Europe/Paris","Europe/Berlin","Asia/Tokyo","Asia/Singapore","Australia/Sydney"];
+const bios = ["Product Manager with 5+ years experience","Full-stack developer passionate about UX","Marketing specialist focused on growth","Data analyst and visualization expert","Customer success advocate","DevOps engineer and cloud architect","UX designer with a love for simplicity","Sales leader driving revenue growth","Content strategist and SEO expert","Engineering manager building great teams"];
+
+function seededRandom(seed) {
+  let s = seed;
+  return function() {
+    s = (s * 16807 + 0) % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+}
+
+function weightedRandom(items, weights, rng) {
+  const r = rng();
+  let sum = 0;
+  for (let i = 0; i < items.length; i++) {
+    sum += weights[i];
+    if (r < sum) return items[i];
+  }
+  return items[items.length - 1];
+}
+
+function generateUsers(count = 150) {
+  const users = [];
+  const rng = seededRandom(42);
+  for (let i = 0; i < count; i++) {
+    const fn = firstNames[Math.floor(rng() * firstNames.length)];
+    const ln = lastNames[Math.floor(rng() * lastNames.length)];
+    const role = weightedRandom(roles, roleWeights, rng);
+    const status = weightedRandom(statuses, statusWeights, rng);
+    const plan = weightedRandom(plans, planWeights, rng);
+    const domain = domains[Math.floor(rng() * domains.length)];
+    const joined = new Date(2024 + Math.floor(rng() * 3), Math.floor(rng() * 12), Math.floor(rng() * 28) + 1);
+    const lastActive = new Date(joined.getTime() + rng() * (Date.now() - joined.getTime()));
+    users.push({
+      id: `usr_${Math.random().toString(36).substr(2, 9)}_${i}`,
+      name: `${fn} ${ln}`,
+      email: `${fn.toLowerCase()}.${ln.toLowerCase()}@${domain}`,
+      avatar: `https://api.dicebear.com/9.x/avataaars/svg?seed=${fn}${ln}${i}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`,
+      role, status, plan,
+      lastActive: lastActive.toISOString(),
+      joinedAt: joined.toISOString(),
+      bio: bios[Math.floor(rng() * bios.length)],
+      timezone: timezones[Math.floor(rng() * timezones.length)],
+      language: "en"
+    });
+  }
+  return users;
+}
+
+const productNames = ["Wireless Bluetooth Headphones Pro","Ergonomic Office Chair","Smart Fitness Watch","Portable SSD 1TB","USB-C Hub 7-in-1","Mechanical Keyboard RGB","4K Webcam with Mic","Standing Desk Converter","Noise Cancelling Earbuds","Wireless Charging Pad","Smart Home Hub","Bluetooth Speaker Mini","Laptop Stand Aluminum","Monitor Light Bar","Cable Management Kit","Desk Organizer Bamboo","Webcam Privacy Cover","Phone Mount Flexible","Tablet Stand Adjustable","Wireless Mouse Silent","Keyboard Wrist Rest","Monitor Arm Dual","Desk Pad Large","Cable Clips Adhesive","Power Strip Surge","LED Desk Lamp","Air Purifier Mini","Coffee Warmer USB","Foot Rest Ergonomic","Document Holder","Blue Light Glasses","Posture Corrector","Stress Ball Set","Fidget Cube","Desk Plant Artificial","Whiteboard Small","Sticky Notes Pack","Pen Holder Magnetic","Notebook Leather","Planner Weekly","Highlighter Set","Stapler Mini","Tape Dispenser","Scissors Premium","Ruler Metal","Calculator Scientific","Staple Remover","Hole Punch","Paper Clips Jumbo","Binder Clips Assorted","Rubber Bands Pack"];
+const categories = ["Electronics","Office","Accessories","Furniture","Health","Software"];
+const productStatuses = ["active","draft","archived"];
+const productStatusWeights = [0.7, 0.2, 0.1];
+
+function generateProducts(count = 50) {
+  const products = [];
+  const rng = seededRandom(123);
+  for (let i = 0; i < count; i++) {
+    const name = productNames[i % productNames.length] + (i >= productNames.length ? ` ${Math.floor(i / productNames.length) + 1}` : "");
+    const category = categories[Math.floor(rng() * categories.length)];
+    const status = weightedRandom(productStatuses, productStatusWeights, rng);
+    const price = Math.floor(rng() * 200) + 19.99;
+    const stock = Math.floor(rng() * 200);
+    const sales = Math.floor(rng() * 2000);
+    const created = new Date(2025 + Math.floor(rng() * 2), Math.floor(rng() * 12), Math.floor(rng() * 28) + 1);
+    products.push({
+      id: `prd_${Math.random().toString(36).substr(2, 9)}_${i}`,
+      name, sku: `${category.slice(0,3).toUpperCase()}-2026-${String(i + 1).padStart(3, '0')}`,
+      description: `Premium ${name.toLowerCase()} with advanced features and excellent build quality.`,
+      category, price, stock, status,
+      image: `https://placehold.co/400x400/${['4f46e5','10b981','f59e0b','3b82f6','8b5cf6','ef4444'][i % 6]}/ffffff?text=${encodeURIComponent(name.slice(0, 10))}`,
+      sales, createdAt: created.toISOString(), updatedAt: new Date().toISOString()
+    });
+  }
+  return products;
+}
+
+const orderStatuses = ["pending","processing","shipped","delivered","cancelled"];
+const orderStatusWeights = [0.2, 0.15, 0.3, 0.3, 0.05];
+const streets = ["123 Main St","456 Oak Ave","789 Pine Rd","321 Elm Blvd","654 Maple Dr","987 Cedar Ln","147 Birch Way","258 Spruce Ct","369 Willow Pl","741 Aspen Cir"];
+const cities = ["New York","Los Angeles","Chicago","Houston","Phoenix","Philadelphia","San Antonio","San Diego","Dallas","San Jose"];
+const states = ["NY","CA","IL","TX","AZ","PA","TX","CA","TX","CA"];
+
+function generateOrders(count = 200, users, products) {
+  const orders = [];
+  const rng = seededRandom(456);
+  for (let i = 0; i < count; i++) {
+    const user = users[Math.floor(rng() * users.length)];
+    const numItems = Math.floor(rng() * 3) + 1;
+    const items = [];
+    let total = 0;
+    for (let j = 0; j < numItems; j++) {
+      const prod = products[Math.floor(rng() * products.length)];
+      const qty = Math.floor(rng() * 3) + 1;
+      items.push({ productId: prod.id, productName: prod.name, quantity: qty, price: prod.price });
+      total += prod.price * qty;
+    }
+    const status = weightedRandom(orderStatuses, orderStatusWeights, rng);
+    const created = new Date(2026, Math.floor(rng() * 6), Math.floor(rng() * 28) + 1);
+    orders.push({
+      id: `ORD-${String(78000 + i).padStart(5, '0')}`,
+      customerId: user.id, customerName: user.name, customerEmail: user.email,
+      items, total: parseFloat(total.toFixed(2)), status,
+      shippingAddress: { street: streets[Math.floor(rng() * streets.length)], city: cities[Math.floor(rng() * cities.length)], state: states[Math.floor(rng() * states.length)], zip: String(Math.floor(rng() * 90000) + 10000), country: "US" },
+      createdAt: created.toISOString(), updatedAt: new Date(created.getTime() + rng() * 86400000).toISOString()
+    });
+  }
+  return orders;
+}
+
+function generateRevenueData(days = 365) {
+  const data = [];
+  const rng = seededRandom(789);
+  const baseRevenue = 3000;
+  const baseOrders = 30;
+  for (let i = 0; i < days; i++) {
+    const date = new Date();
+    date.setDate(date.getDate() - (days - i));
+    const trend = i * 8;
+    const seasonal = Math.sin(i / 30) * 1000;
+    const noise = (rng() - 0.5) * 2000;
+    data.push({
+      date: date.toISOString().split('T')[0],
+      revenue: Math.max(1000, Math.floor(baseRevenue + trend + seasonal + noise)),
+      orders: Math.max(5, Math.floor(baseOrders + i / 10 + (rng() - 0.5) * 20))
+    });
+  }
+  return data;
+}
+
+const trafficSources = [
+  { name: "Organic", value: 4500, color: "#4f46e5" },
+  { name: "Direct", value: 3200, color: "#10b981" },
+  { name: "Social", value: 2800, color: "#f59e0b" },
+  { name: "Referral", value: 1900, color: "#3b82f6" },
+  { name: "Email", value: 1500, color: "#8b5cf6" },
+  { name: "Paid", value: 1100, color: "#ef4444" }
+];
+
+const activityTypes = ["signup","order","payment","upgrade","ticket"];
+const activityDescriptions = {
+  signup: (name) => `${name} signed up for a new account`,
+  order: (name, id) => `${name} placed order ${id}`,
+  payment: (name, amount) => `${name} made a payment of $${amount}`,
+  upgrade: (name, plan) => `${name} upgraded to ${plan} plan`,
+  ticket: (name) => `${name} submitted a support ticket`
+};
+
+function generateActivities(count = 100, users, orders) {
+  const activities = [];
+  const rng = seededRandom(101);
+  for (let i = 0; i < count; i++) {
+    const type = activityTypes[Math.floor(rng() * activityTypes.length)];
+    const user = users[Math.floor(rng() * users.length)];
+    const order = orders[Math.floor(rng() * orders.length)];
+    const created = new Date(Date.now() - rng() * 604800000); // Last 7 days
+    let desc;
+    if (type === "order") desc = activityDescriptions.order(user.name, order.id);
+    else if (type === "payment") desc = activityDescriptions.payment(user.name, (rng() * 500).toFixed(2));
+    else if (type === "upgrade") desc = activityDescriptions.upgrade(user.name, plans[Math.floor(rng() * 3)]);
+    else desc = activityDescriptions[type](user.name);
+    activities.push({ id: `act_${i}`, type, userId: user.id, userName: user.name, description: desc, createdAt: created.toISOString() });
+  }
+  return activities.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+// ==================== STATE MANAGEMENT ====================
+const AppState = {
+  auth: { user: null, isAuthenticated: false, token: null },
+  theme: { mode: 'system', sidebarCollapsed: false, density: 'comfortable', accentColor: '#4f46e5' },
+  ui: { currentPage: 'dashboard', sidebarOpen: false, notificationsOpen: false, searchOpen: false },
+  data: { users: [], products: [], orders: [], revenueData: [], activities: [] },
+  tables: { users: { page: 1, limit: 10, search: '', sort: 'name', order: 'asc', filters: {} },
+            products: { page: 1, limit: 10, search: '', sort: 'name', order: 'asc' },
+            orders: { page: 1, limit: 10, search: '', sort: 'createdAt', order: 'desc' } }
+};
+
+// Initialize data
+AppState.data.users = generateUsers(150);
+AppState.data.products = generateProducts(50);
+AppState.data.orders = generateOrders(200, AppState.data.users, AppState.data.products);
+AppState.data.revenueData = generateRevenueData(365);
+AppState.data.activities = generateActivities(100, AppState.data.users, AppState.data.orders);
+
+// ==================== MOCK API ====================
+const mockApi = {
+  delay: (ms = 300) => new Promise(resolve => setTimeout(resolve, ms)),
+
+  async login(email, password) {
+    await this.delay();
+    const user = AppState.data.users.find(u => u.email === email);
+    if (!user || password.length < 6) throw new Error('Invalid email or password');
+    const token = btoa(JSON.stringify({ userId: user.id, exp: Date.now() + 86400000 }));
+    return { token, user };
+  },
+
+  async signup(data) {
+    await this.delay();
+    if (AppState.data.users.find(u => u.email === data.email)) throw new Error('Email already exists');
+    const newUser = { id: `usr_${Math.random().toString(36).substr(2, 9)}`, ...data, role: 'user', status: 'active', plan: 'free', lastActive: new Date().toISOString(), joinedAt: new Date().toISOString(), bio: '', timezone: 'America/New_York', language: 'en' };
+    AppState.data.users.push(newUser);
+    const token = btoa(JSON.stringify({ userId: newUser.id, exp: Date.now() + 86400000 }));
+    return { token, user: newUser };
+  },
+
+  async getUsers(page = 1, limit = 10, search = '', sort = 'name', order = 'asc', filters = {}) {
+    await this.delay(200);
+    let filtered = [...AppState.data.users];
+    if (search) {
+      const s = search.toLowerCase();
+      filtered = filtered.filter(u => u.name.toLowerCase().includes(s) || u.email.toLowerCase().includes(s));
+    }
+    if (filters.role) filtered = filtered.filter(u => u.role === filters.role);
+    if (filters.status) filtered = filtered.filter(u => u.status === filters.status);
+    if (filters.plan) filtered = filtered.filter(u => u.plan === filters.plan);
+    filtered.sort((a, b) => {
+      let aVal = a[sort], bVal = b[sort];
+      if (typeof aVal === 'string') { aVal = aVal.toLowerCase(); bVal = bVal.toLowerCase(); }
+      return order === 'asc' ? (aVal > bVal ? 1 : -1) : (aVal < bVal ? 1 : -1);
+    });
+    const total = filtered.length;
+    const pages = Math.ceil(total / limit);
+    const start = (page - 1) * limit;
+    return { users: filtered.slice(start, start + limit), total, pages, page: Math.min(page, pages || 1) };
+  },
+
+  async getDashboardStats() {
+    await this.delay(200);
+    const totalRevenue = AppState.data.revenueData.reduce((sum, d) => sum + d.revenue, 0);
+    const activeUsers = AppState.data.users.filter(u => u.status === 'active').length;
+    const now = new Date();
+    const newSignups = AppState.data.users.filter(u => {
+      const joined = new Date(u.joinedAt);
+      return joined.getMonth() === now.getMonth() && joined.getFullYear() === now.getFullYear();
+    }).length;
+    const totalOrders = AppState.data.orders.length;
+    const conversionRate = ((AppState.data.orders.length / AppState.data.users.length) * 100).toFixed(1);
+    const avgOrderValue = (totalRevenue / totalOrders).toFixed(2);
+    return {
+      metrics: [
+        { label: 'Total Revenue', value: `$${(totalRevenue / 1000000).toFixed(2)}M`, change: 12.5, trend: 'up' },
+        { label: 'Active Users', value: activeUsers.toLocaleString(), change: 8.2, trend: 'up' },
+        { label: 'New Signups', value: newSignups.toString(), change: -3.1, trend: 'down' },
+        { label: 'Conversion Rate', value: `${conversionRate}%`, change: 5.4, trend: 'up' },
+        { label: 'Churn Rate', value: '2.3%', change: -1.2, trend: 'up' },
+        { label: 'Avg Order Value', value: `$${avgOrderValue}`, change: 7.8, trend: 'up' }
+      ]
+    };
+  },
+
+  async getRevenueData(range = '30d') {
+    await this.delay(200);
+    const days = range === '7d' ? 7 : range === '30d' ? 30 : range === '90d' ? 90 : 365;
+    return AppState.data.revenueData.slice(-days);
+  },
+
+  async getTrafficSources() {
+    await this.delay(100);
+    return trafficSources;
+  },
+
+  async getActivities(limit = 10) {
+    await this.delay(100);
+    return AppState.data.activities.slice(0, limit);
+  },
+
+  async updateUser(id, data) {
+    await this.delay(200);
+    const idx = AppState.data.users.findIndex(u => u.id === id);
+    if (idx === -1) throw new Error('User not found');
+    AppState.data.users[idx] = { ...AppState.data.users[idx], ...data, updatedAt: new Date().toISOString() };
+    return AppState.data.users[idx];
+  },
+
+  async deleteUser(id) {
+    await this.delay(200);
+    const idx = AppState.data.users.findIndex(u => u.id === id);
+    if (idx === -1) throw new Error('User not found');
+    AppState.data.users.splice(idx, 1);
+    return { success: true };
+  },
+
+  async updateOrderStatus(id, status) {
+    await this.delay(200);
+    const idx = AppState.data.orders.findIndex(o => o.id === id);
+    if (idx === -1) throw new Error('Order not found');
+    AppState.data.orders[idx].status = status;
+    AppState.data.orders[idx].updatedAt = new Date().toISOString();
+    return AppState.data.orders[idx];
+  }
+};
+
+// ==================== UTILITY FUNCTIONS ====================
+function formatDate(dateStr, relative = false) {
+  const date = new Date(dateStr);
+  if (relative) {
+    const diff = Date.now() - date.getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function formatCurrency(amount) {
+  return '$' + parseFloat(amount).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
+}
+
+function formatNumber(num) {
+  return num.toLocaleString();
+}
+
+function getInitials(name) {
+  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+}
+
+// ==================== UI COMPONENTS ====================
+function showToast(message, type = 'info', duration = 5000) {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  const icons = { success: 'check-circle', error: 'x-circle', warning: 'alert-triangle', info: 'info' };
+  const colors = { success: 'bg-emerald-500', error: 'bg-rose-500', warning: 'bg-amber-500', info: 'bg-blue-500' };
+  toast.className = `${colors[type]} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 min-w-[300px] max-w-[400px] toast-enter pointer-events-auto`;
+  toast.innerHTML = `
+    <i data-lucide="${icons[type]}" class="w-5 h-5 flex-shrink-0"></i>
+    <span class="text-sm font-medium">${message}</span>
+    <button onclick="this.parentElement.remove()" class="ml-auto p-1 hover:bg-white/20 rounded transition-colors">
+      <i data-lucide="x" class="w-4 h-4"></i>
+    </button>
+  `;
+  container.appendChild(toast);
+  requestAnimationFrame(() => { toast.classList.remove('toast-enter'); toast.classList.add('toast-enter-active'); });
+  setTimeout(() => {
+    toast.classList.remove('toast-enter-active');
+    toast.classList.add('toast-exit-active');
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+  if (window.lucide) lucide.createIcons();
+}
+
+function showModal(title, content, onConfirm = null, onCancel = null) {
+  const container = document.getElementById('modal-container');
+  container.innerHTML = `
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 modal-backdrop" onclick="if(event.target===this) closeModal()">
+      <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto transform scale-95 opacity-0 transition-all duration-300" id="modalContent">
+        <div class="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
+          <h3 class="text-lg font-semibold text-slate-900 dark:text-white">${title}</h3>
+          <button onclick="closeModal()" class="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
+            <i data-lucide="x" class="w-5 h-5 text-slate-500"></i>
+          </button>
+        </div>
+        <div class="p-6">${content}</div>
+        ${onConfirm ? `
+        <div class="flex justify-end gap-3 p-6 border-t border-slate-200 dark:border-slate-700">
+          <button onclick="closeModal(); ${onCancel || ''}" class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">Cancel</button>
+          <button onclick="${onConfirm}(); closeModal();" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors">Confirm</button>
+        </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+  container.classList.remove('pointer-events-none');
+  requestAnimationFrame(() => {
+    const content = document.getElementById('modalContent');
+    if (content) { content.classList.remove('scale-95', 'opacity-0'); content.classList.add('scale-100', 'opacity-100'); }
+  });
+  document.addEventListener('keydown', handleModalEscape, { once: true });
+  if (window.lucide) lucide.createIcons();
+}
+
+function closeModal() {
+  const container = document.getElementById('modal-container');
+  const content = document.getElementById('modalContent');
+  if (content) { content.classList.remove('scale-100', 'opacity-100'); content.classList.add('scale-95', 'opacity-0'); }
+  setTimeout(() => { container.innerHTML = ''; container.classList.add('pointer-events-none'); }, 300);
+}
+
+function handleModalEscape(e) { if (e.key === 'Escape') closeModal(); }
+
+function Badge(text, variant) {
+  const colors = {
+    admin: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+    editor: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+    user: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
+    active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+    inactive: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',
+    pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+    free: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
+    pro: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
+    enterprise: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+    pending_order: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+    processing: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+    shipped: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
+    delivered: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+    cancelled: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'
+  };
+  return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colors[variant] || colors.user}">${text}</span>`;
+}
+
+function Skeleton(count = 1, className = '') {
+  return Array.from({ length: count }, () => `<div class="skeleton ${className}"></div>`).join('');
+}
+
+// ==================== VALIDATORS ====================
+const validators = {
+  email: (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? null : 'Please enter a valid email address',
+  password: (v) => {
+    if (v.length < 8) return 'Password must be at least 8 characters';
+    if (!/[A-Z]/.test(v)) return 'Must contain an uppercase letter';
+    if (!/[0-9]/.test(v)) return 'Must contain a number';
+    if (!/[@$!%*?&]/.test(v)) return 'Must contain a special character';
+    return null;
+  },
+  required: (v) => v.trim() ? null : 'This field is required',
+  minLength: (v, min) => v.length >= min ? null : `Must be at least ${min} characters`
+};
+
+function validateField(inputId, rules) {
+  const input = document.getElementById(inputId);
+  if (!input) return true;
+  const value = input.value;
+  let error = null;
+  for (const rule of rules) {
+    if (rule === 'email') error = validators.email(value);
+    else if (rule === 'password') error = validators.password(value);
+    else if (rule === 'required') error = validators.required(value);
+    else if (rule.startsWith('min:')) error = validators.minLength(value, parseInt(rule.split(':')[1]));
+    if (error) break;
+  }
+  const errorEl = document.getElementById(inputId + 'Error');
+  if (errorEl) { errorEl.textContent = error || ''; errorEl.classList.toggle('hidden', !error); }
+  input.classList.toggle('border-rose-500', !!error);
+  input.classList.toggle('focus:ring-rose-500', !!error);
+  input.classList.toggle('focus:ring-indigo-500', !error);
+  return !error;
+}
+
+function clearValidation(inputId) {
+  const input = document.getElementById(inputId);
+  const errorEl = document.getElementById(inputId + 'Error');
+  if (input) { input.classList.remove('border-rose-500', 'focus:ring-rose-500'); input.classList.add('focus:ring-indigo-500'); }
+  if (errorEl) { errorEl.textContent = ''; errorEl.classList.add('hidden'); }
+}
+
+// ==================== THEME MANAGEMENT ====================
+function updateTheme() {
+  const html = document.documentElement;
+  const isDark = AppState.theme.mode === 'dark' || (AppState.theme.mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  html.classList.toggle('dark', isDark);
+  Chart.defaults.color = isDark ? '#94a3b8' : '#64748b';
+  Chart.defaults.borderColor = isDark ? '#334155' : '#e2e8f0';
+}
+
+function toggleTheme() {
+  const modes = ['light', 'dark', 'system'];
+  const idx = modes.indexOf(AppState.theme.mode);
+  AppState.theme.mode = modes[(idx + 1) % modes.length];
+  localStorage.setItem('theme', AppState.theme.mode);
+  updateTheme();
+  navigateTo(AppState.ui.currentPage);
+}
+
+function toggleSidebar() {
+  AppState.theme.sidebarCollapsed = !AppState.theme.sidebarCollapsed;
+  navigateTo(AppState.ui.currentPage);
+}
+
+function toggleMobileSidebar() {
+  AppState.ui.sidebarOpen = !AppState.ui.sidebarOpen;
+  navigateTo(AppState.ui.currentPage);
+}
+
+function toggleNotifications() {
+  AppState.ui.notificationsOpen = !AppState.ui.notificationsOpen;
+  navigateTo(AppState.ui.currentPage);
+}
+
+// ==================== AUTHENTICATION ====================
+async function handleLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value;
+  const password = document.getElementById('loginPassword').value;
+  const rememberMe = document.getElementById('rememberMe')?.checked || false;
+
+  const valid = validateField('loginEmail', ['required', 'email']) && validateField('loginPassword', ['required']);
+  if (!valid) return;
+
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Signing in...</span>';
+  if (window.lucide) lucide.createIcons();
+
+  try {
+    const { token, user } = await mockApi.login(email, password);
+    AppState.auth = { user, isAuthenticated: true, token };
+    if (rememberMe) localStorage.setItem('auth_token', token); else sessionStorage.setItem('auth_token', token);
+    showToast(`Welcome back, ${user.name}!`, 'success');
+    navigateTo('dashboard');
+  } catch (err) {
+    showToast(err.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<span>Sign in</span><i data-lucide="arrow-right" class="w-4 h-4"></i>';
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+async function handleSignup(e) {
+  e.preventDefault();
+  const name = document.getElementById('signupName').value;
+  const email = document.getElementById('signupEmail').value;
+  const password = document.getElementById('signupPassword').value;
+  const confirm = document.getElementById('signupConfirm').value;
+
+  let valid = validateField('signupName', ['required', 'min:2']) &&
+              validateField('signupEmail', ['required', 'email']) &&
+              validateField('signupPassword', ['required', 'password']);
+
+  if (password !== confirm) {
+    const errEl = document.getElementById('signupConfirmError');
+    if (errEl) { errEl.textContent = 'Passwords do not match'; errEl.classList.remove('hidden'); }
+    document.getElementById('signupConfirm').classList.add('border-rose-500');
+    valid = false;
+  }
+
+  if (!valid) return;
+
+  const btn = document.getElementById('signupBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Creating account...</span>';
+  if (window.lucide) lucide.createIcons();
+
+  try {
+    const { token, user } = await mockApi.signup({ name, email, password });
+    AppState.auth = { user, isAuthenticated: true, token };
+    localStorage.setItem('auth_token', token);
+    showToast('Account created successfully!', 'success');
+    navigateTo('dashboard');
+  } catch (err) {
+    showToast(err.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<span>Create account</span><i data-lucide="arrow-right" class="w-4 h-4"></i>';
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+async function handleReset(e) {
+  e.preventDefault();
+  const email = document.getElementById('resetEmail').value;
+  if (!validateField('resetEmail', ['required', 'email'])) return;
+
+  const btn = document.getElementById('resetBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Sending...</span>';
+  if (window.lucide) lucide.createIcons();
+
+  await mockApi.delay(1000);
+  showToast('Password reset link sent to your email', 'success');
+  document.getElementById('resetForm').innerHTML = `
+    <div class="text-center py-8">
+      <div class="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+        <i data-lucide="mail-check" class="w-8 h-8 text-emerald-600 dark:text-emerald-400"></i>
+      </div>
+      <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">Check your email</h3>
+      <p class="text-sm text-slate-500 dark:text-slate-400">We've sent a password reset link to ${email}</p>
+      <button onclick="navigateTo('login')" class="mt-4 text-sm text-indigo-600 hover:text-indigo-500 font-medium">Back to login</button>
+    </div>
+  `;
+  if (window.lucide) lucide.createIcons();
+}
+
+function logout() {
+  AppState.auth = { user: null, isAuthenticated: false, token: null };
+  localStorage.removeItem('auth_token');
+  sessionStorage.removeItem('auth_token');
+  showToast('You have been logged out', 'info');
+  navigateTo('login');
+}
+
+function checkAuth() {
+  const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+  if (token) {
+    try {
+      const decoded = JSON.parse(atob(token));
+      if (decoded.exp > Date.now()) {
+        const user = AppState.data.users.find(u => u.id === decoded.userId);
+        if (user) { AppState.auth = { user, isAuthenticated: true, token }; return true; }
+      }
+    } catch {}
+  }
+  return false;
+}
+
+function togglePassword(inputId) {
+  const input = document.getElementById(inputId);
+  const btn = input.nextElementSibling;
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.innerHTML = '<i data-lucide="eye-off" class="w-4 h-4"></i>';
+  } else {
+    input.type = 'password';
+    btn.innerHTML = '<i data-lucide="eye" class="w-4 h-4"></i>';
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+function updatePasswordStrength(password) {
+  const bar = document.getElementById('passwordStrength');
+  if (!bar) return;
+  let strength = 0;
+  if (password.length >= 8) strength++;
+  if (/[A-Z]/.test(password)) strength++;
+  if (/[0-9]/.test(password)) strength++;
+  if (/[@$!%*?&]/.test(password)) strength++;
+
+  const classes = ['password-strength-weak', 'password-strength-medium', 'password-strength-strong', 'password-strength-strong'];
+  const widths = ['25%', '50%', '75%', '100%'];
+  const labels = ['Weak', 'Fair', 'Good', 'Strong'];
+
+  bar.className = `h-1 rounded-full transition-all duration-300 ${classes[strength - 1] || 'bg-slate-200'}`;
+  bar.style.width = widths[strength - 1] || '0%';
+  const label = document.getElementById('passwordStrengthLabel');
+  if (label) label.textContent = strength > 0 ? labels[strength - 1] : '';
+}
+
+// ==================== ROUTING ====================
+const routes = {
+  login: { auth: false, layout: 'auth' },
+  signup: { auth: false, layout: 'auth' },
+  reset: { auth: false, layout: 'auth' },
+  dashboard: { auth: true, layout: 'main' },
+  analytics: { auth: true, layout: 'main' },
+  users: { auth: true, layout: 'main' },
+  products: { auth: true, layout: 'main' },
+  orders: { auth: true, layout: 'main' },
+  settings: { auth: true, layout: 'main' }
+};
+
+function navigateTo(page) {
+  const route = routes[page];
+  if (!route) page = 'dashboard';
+
+  if (routes[page]?.auth && !AppState.auth.isAuthenticated) {
+    navigateTo('login'); return;
+  }
+  if (!routes[page]?.auth && AppState.auth.isAuthenticated && page !== 'reset') {
+    navigateTo('dashboard'); return;
+  }
+
+  AppState.ui.currentPage = page;
+  AppState.ui.sidebarOpen = false;
+  AppState.ui.notificationsOpen = false;
+
+  const app = document.getElementById('app');
+
+  if (routes[page]?.layout === 'auth') {
+    app.innerHTML = renderAuthPage(page);
+  } else {
+    app.innerHTML = `
+      <div class="flex h-screen bg-slate-50 dark:bg-slate-900">
+        ${renderSidebar()}
+        <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+          ${renderTopBar()}
+          <main class="flex-1 overflow-y-auto p-4 lg:p-6 animate-fade-in">${renderMainPage(page)}</main>
+        </div>
+      </div>
+    `;
+  }
+
+  if (window.lucide) lucide.createIcons();
+  initPageScripts(page);
+  updateTheme();
+  window.scrollTo(0, 0);
+}
+
+function renderAuthPage(page) {
+  if (page === 'login') return renderLogin();
+  if (page === 'signup') return renderSignup();
+  if (page === 'reset') return renderReset();
+  return renderLogin();
+}
+
+function renderMainPage(page) {
+  if (page === 'dashboard') return renderDashboard();
+  if (page === 'analytics') return renderAnalytics();
+  if (page === 'users') return renderUsers();
+  if (page === 'products') return renderProducts();
+  if (page === 'orders') return renderOrders();
+  if (page === 'settings') return renderSettings();
+  return renderDashboard();
+}
+
+// ==================== SIDEBAR & TOPBAR ====================
+function renderSidebar() {
+  const items = [
+    { icon: 'layout-dashboard', label: 'Dashboard', page: 'dashboard' },
+    { icon: 'bar-chart-3', label: 'Analytics', page: 'analytics' },
+    { icon: 'users', label: 'Users', page: 'users', badge: AppState.data.users.filter(u => u.status === 'pending').length },
+    { icon: 'package', label: 'Products', page: 'products' },
+    { icon: 'shopping-cart', label: 'Orders', page: 'orders', badge: AppState.data.orders.filter(o => o.status === 'pending').length },
+    { icon: 'settings', label: 'Settings', page: 'settings' }
+  ];
+
+  const collapsed = AppState.theme.sidebarCollapsed;
+  const mobileOpen = AppState.ui.sidebarOpen;
+
+  return `
+    <aside class="${collapsed ? 'w-16' : 'w-64'} ${mobileOpen ? 'fixed inset-y-0 left-0 z-50' : 'hidden lg:flex'} bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex-col transition-all duration-300 flex-shrink-0">
+      <div class="h-16 flex items-center px-4 border-b border-slate-200 dark:border-slate-700">
+        <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0">
+          <i data-lucide="layout-dashboard" class="w-5 h-5 text-white"></i>
+        </div>
+        ${!collapsed ? '<span class="ml-3 font-bold text-slate-900 dark:text-white truncate">SaaS Dashboard</span>' : ''}
+      </div>
+      <nav class="flex-1 p-3 space-y-1 overflow-y-auto">
+        ${items.map(item => `
+          <button onclick="navigateTo('${item.page}')" 
+            class="w-full flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg transition-all duration-200 ${AppState.ui.currentPage === item.page ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}"
+            title="${collapsed ? item.label : ''}">
+            <i data-lucide="${item.icon}" class="w-5 h-5 flex-shrink-0"></i>
+            ${!collapsed ? `<span class="text-sm font-medium">${item.label}</span>` : ''}
+            ${item.badge && !collapsed ? `<span class="ml-auto bg-rose-500 text-white text-xs px-2 py-0.5 rounded-full min-w-[20px] text-center">${item.badge}</span>` : ''}
+            ${item.badge && collapsed ? `<span class="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full"></span>` : ''}
+          </button>
+        `).join('')}
+      </nav>
+      <div class="p-3 border-t border-slate-200 dark:border-slate-700">
+        <button onclick="logout()" class="w-full flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" title="${collapsed ? 'Logout' : ''}">
+          <i data-lucide="log-out" class="w-5 h-5 flex-shrink-0"></i>
+          ${!collapsed ? '<span class="text-sm font-medium">Logout</span>' : ''}
+        </button>
+      </div>
+    </aside>
+    ${mobileOpen ? '<div onclick="toggleMobileSidebar()" class="fixed inset-0 bg-black/50 z-40 lg:hidden modal-backdrop"></div>' : ''}
+  `;
+}
+
+function renderTopBar() {
+  const user = AppState.auth.user;
+  return `
+    <header class="h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-4 lg:px-6 flex-shrink-0">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleMobileSidebar()" class="lg:hidden p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
+          <i data-lucide="menu" class="w-5 h-5 text-slate-600 dark:text-slate-400"></i>
+        </button>
+        <button onclick="toggleSidebar()" class="hidden lg:flex p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
+          <i data-lucide="panel-left" class="w-5 h-5 text-slate-600 dark:text-slate-400"></i>
+        </button>
+        <nav class="hidden md:flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+          <span class="hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer transition-colors">Home</span>
+          <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          <span class="text-slate-900 dark:text-white font-medium capitalize">${AppState.ui.currentPage}</span>
+        </nav>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="toggleTheme()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors" title="Toggle theme">
+          <i data-lucide="${AppState.theme.mode === 'dark' ? 'sun' : 'moon'}" class="w-5 h-5 text-slate-600 dark:text-slate-400"></i>
+        </button>
+        <div class="relative">
+          <button onclick="toggleNotifications()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors relative" title="Notifications">
+            <i data-lucide="bell" class="w-5 h-5 text-slate-600 dark:text-slate-400"></i>
+            <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full"></span>
+          </button>
+          ${AppState.ui.notificationsOpen ? renderNotificationsDropdown() : ''}
+        </div>
+        <div class="flex items-center gap-3 pl-3 border-l border-slate-200 dark:border-slate-700">
+          <img src="${user?.avatar || 'https://api.dicebear.com/9.x/avataaars/svg?seed=default'}" alt="${user?.name || 'User'}" class="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 object-cover">
+          <div class="hidden md:block">
+            <p class="text-sm font-medium text-slate-900 dark:text-white leading-tight">${user?.name || 'Admin User'}</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400 capitalize leading-tight">${user?.role || 'Admin'}</p>
+          </div>
+        </div>
+      </div>
+    </header>
+  `;
+}
+
+function renderNotificationsDropdown() {
+  const notifications = [
+    { type: 'order', message: 'New order #ORD-78501 received', time: '2m ago', unread: true },
+    { type: 'user', message: 'Sarah Johnson upgraded to Pro', time: '15m ago', unread: true },
+    { type: 'system', message: 'System backup completed', time: '1h ago', unread: false },
+    { type: 'alert', message: 'Server CPU usage at 85%', time: '2h ago', unread: false },
+    { type: 'order', message: 'Order #ORD-78495 shipped', time: '3h ago', unread: false }
+  ];
+  const icons = { order: 'shopping-cart', user: 'user', system: 'check-circle', alert: 'alert-triangle' };
+  const colors = { order: 'text-blue-500', user: 'text-purple-500', system: 'text-emerald-500', alert: 'text-amber-500' };
+
+  return `
+    <div class="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden z-50 animate-fade-in">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+        <h4 class="text-sm font-semibold text-slate-900 dark:text-white">Notifications</h4>
+        <button class="text-xs text-indigo-600 hover:text-indigo-500 font-medium">Mark all read</button>
+      </div>
+      <div class="max-h-80 overflow-y-auto">
+        ${notifications.map(n => `
+          <div class="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer ${n.unread ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''}">
+            <div class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <i data-lucide="${icons[n.type]}" class="w-4 h-4 ${colors[n.type]}"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm text-slate-900 dark:text-slate-100 truncate">${n.message}</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">${n.time}</p>
+            </div>
+            ${n.unread ? '<span class="w-2 h-2 bg-indigo-500 rounded-full flex-shrink-0 mt-2"></span>' : ''}
+          </div>
+        `).join('')}
+      </div>
+      <div class="px-4 py-2 border-t border-slate-200 dark:border-slate-700 text-center">
+        <button class="text-xs text-indigo-600 hover:text-indigo-500 font-medium">View all notifications</button>
+      </div>
+    </div>
+  `;
+}
+
+// ==================== AUTH PAGES ====================
+function renderLogin() {
+  return `
+    <div class="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 p-4">
+      <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 animate-slide-up">
+        <div class="text-center mb-8">
+          <div class="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="layout-dashboard" class="w-6 h-6 text-white"></i>
+          </div>
+          <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Welcome back</h1>
+          <p class="text-slate-500 dark:text-slate-400 mt-1">Sign in to your account</p>
+        </div>
+        <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email</label>
+            <input type="email" id="loginEmail" required 
+              class="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+              placeholder="sarah.j@techcorp.com" oninput="clearValidation('loginEmail')">
+            <p id="loginEmailError" class="text-xs text-rose-500 mt-1 hidden"></p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Password</label>
+            <div class="relative">
+              <input type="password" id="loginPassword" required 
+                class="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all pr-10"
+                placeholder="••••••••" oninput="clearValidation('loginPassword')">
+              <button type="button" onclick="togglePassword('loginPassword')" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                <i data-lucide="eye" class="w-4 h-4"></i>
+              </button>
+            </div>
+            <p id="loginPasswordError" class="text-xs text-rose-500 mt-1 hidden"></p>
+          </div>
+          <div class="flex items-center justify-between">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="rememberMe" class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+              <span class="text-sm text-slate-600 dark:text-slate-400">Remember me</span>
+            </label>
+            <button type="button" onclick="navigateTo('reset')" class="text-sm text-indigo-600 hover:text-indigo-500 font-medium transition-colors">Forgot password?</button>
+          </div>
+          <button type="submit" id="loginBtn" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
+            <span>Sign in</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </button>
+        </form>
+        <p class="text-center mt-6 text-sm text-slate-500 dark:text-slate-400">
+          Don't have an account? 
+          <button onclick="navigateTo('signup')" class="text-indigo-600 hover:text-indigo-500 font-medium transition-colors">Sign up</button>
+        </p>
+        <div class="mt-6 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+          <p class="text-xs text-slate-500 dark:text-slate-400 text-center">Demo credentials: <span class="font-mono font-medium">sarah.j@techcorp.com</span> / <span class="font-mono font-medium">Password123!</span></p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderSignup() {
+  return `
+    <div class="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 p-4">
+      <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 animate-slide-up">
+        <div class="text-center mb-8">
+          <div class="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="user-plus" class="w-6 h-6 text-white"></i>
+          </div>
+          <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Create account</h1>
+          <p class="text-slate-500 dark:text-slate-400 mt-1">Start your 14-day free trial</p>
+        </div>
+        <form id="signupForm" onsubmit="handleSignup(event)" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Full Name</label>
+            <input type="text" id="signupName" required 
+              class="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+              placeholder="John Doe" oninput="clearValidation('signupName')">
+            <p id="signupNameError" class="text-xs text-rose-500 mt-1 hidden"></p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email</label>
+            <input type="email" id="signupEmail" required 
+              class="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+              placeholder="john@example.com" oninput="clearValidation('signupEmail')">
+            <p id="signupEmailError" class="text-xs text-rose-500 mt-1 hidden"></p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Password</label>
+            <div class="relative">
+              <input type="password" id="signupPassword" required 
+                class="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all pr-10"
+                placeholder="••••••••" oninput="clearValidation('signupPassword'); updatePasswordStrength(this.value)">
+              <button type="button" onclick="togglePassword('signupPassword')" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                <i data-lucide="eye" class="w-4 h-4"></i>
+              </button>
+            </div>
+            <div class="mt-1.5 h-1 bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
+              <div id="passwordStrength" class="h-full w-0 transition-all duration-300"></div>
+            </div>
+            <p id="passwordStrengthLabel" class="text-xs text-slate-500 dark:text-slate-400 mt-0.5"></p>
+            <p id="signupPasswordError" class="text-xs text-rose-500 mt-1 hidden"></p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Confirm Password</label>
+            <input type="password" id="signupConfirm" required 
+              class="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+              placeholder="••••••••" oninput="clearValidation('signupConfirm')">
+            <p id="signupConfirmError" class="text-xs text-rose-500 mt-1 hidden"></p>
+          </div>
+          <div class="flex items-start gap-2">
+            <input type="checkbox" id="terms" required class="w-4 h-4 mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+            <label for="terms" class="text-sm text-slate-600 dark:text-slate-400">I agree to the <button type="button" class="text-indigo-600 hover:text-indigo-500 font-medium">Terms of Service</button> and <button type="button" class="text-indigo-600 hover:text-indigo-500 font-medium">Privacy Policy</button></label>
+          </div>
+          <button type="submit" id="signupBtn" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
+            <span>Create account</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </button>
+        </form>
+        <p class="text-center mt-6 text-sm text-slate-500 dark:text-slate-400">
+          Already have an account? 
+          <button onclick="navigateTo('login')" class="text-indigo-600 hover:text-indigo-500 font-medium transition-colors">Sign in</button>
+        </p>
+      </div>
+    </div>
+  `;
+}
+
+function renderReset() {
+  return `
+    <div class="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 p-4">
+      <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 animate-slide-up">
+        <div class="text-center mb-8">
+          <div class="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="key-round" class="w-6 h-6 text-white"></i>
+          </div>
+          <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Reset password</h1>
+          <p class="text-slate-500 dark:text-slate-400 mt-1">Enter your email to receive a reset link</p>
+        </div>
+        <form id="resetForm" onsubmit="handleReset(event)" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email</label>
+            <input type="email" id="resetEmail" required 
+              class="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+              placeholder="sarah.j@techcorp.com" oninput="clearValidation('resetEmail')">
+            <p id="resetEmailError" class="text-xs text-rose-500 mt-1 hidden"></p>
+          </div>
+          <button type="submit" id="resetBtn" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
+            <span>Send reset link</span>
+            <i data-lucide="send" class="w-4 h-4"></i>
+          </button>
+        </form>
+        <p class="text-center mt-6 text-sm text-slate-500 dark:text-slate-400">
+          Remember your password? 
+          <button onclick="navigateTo('login')" class="text-indigo-600 hover:text-indigo-500 font-medium transition-colors">Sign in</button>
+        </p>
+      </div>
+    </div>
+  `;
+}
+
+// ==================== DASHBOARD PAGE ====================
+function renderDashboard() {
+  return `
+    <div class="space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Dashboard</h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Welcome back! Here's what's happening today.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="navigateTo('users')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
+            <i data-lucide="user-plus" class="w-4 h-4"></i>
+            <span class="hidden sm:inline">Add User</span>
+          </button>
+          <button onclick="exportDashboard()" class="px-4 py-2 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
+            <i data-lucide="download" class="w-4 h-4"></i>
+            <span class="hidden sm:inline">Export</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="kpiCards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        ${Skeleton(6, 'h-28')}
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Revenue Overview</h3>
+            <div class="flex items-center gap-2">
+              <button onclick="updateRevenueChart('7d')" class="px-3 py-1 text-xs font-medium rounded-lg transition-colors ${AppState.ui.revenueRange === '7d' ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}">7D</button>
+              <button onclick="updateRevenueChart('30d')" class="px-3 py-1 text-xs font-medium rounded-lg transition-colors ${AppState.ui.revenueRange === '30d' || !AppState.ui.revenueRange ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}">30D</button>
+              <button onclick="updateRevenueChart('90d')" class="px-3 py-1 text-xs font-medium rounded-lg transition-colors ${AppState.ui.revenueRange === '90d' ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}">90D</button>
+              <button onclick="updateRevenueChart('1y')" class="px-3 py-1 text-xs font-medium rounded-lg transition-colors ${AppState.ui.revenueRange === '1y' ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}">1Y</button>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="revenueChart"></canvas>
+          </div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+          <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Traffic Sources</h3>
+          <div class="chart-container" style="height: 250px;">
+            <canvas id="trafficChart"></canvas>
+          </div>
+          <div class="mt-4 space-y-2">
+            ${trafficSources.map(s => `
+              <div class="flex items-center justify-between text-sm">
+                <div class="flex items-center gap-2">
+                  <span class="w-3 h-3 rounded-full" style="background-color: ${s.color}"></span>
+                  <span class="text-slate-600 dark:text-slate-400">${s.name}</span>
+                </div>
+                <span class="font-medium text-slate-900 dark:text-white">${((s.value / trafficSources.reduce((a,b) => a + b.value, 0)) * 100).toFixed(1)}%</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+          <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">User Growth</h3>
+          <div class="chart-container" style="height: 250px;">
+            <canvas id="userGrowthChart"></canvas>
+          </div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Recent Activity</h3>
+            <button onclick="navigateTo('analytics')" class="text-sm text-indigo-600 hover:text-indigo-500 font-medium">View all</button>
+          </div>
+          <div id="activityFeed" class="space-y-3 max-h-[300px] overflow-y-auto">
+            ${Skeleton(5, 'h-12')}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function loadDashboardData() {
+  try {
+    const stats = await mockApi.getDashboardStats();
+    const kpiContainer = document.getElementById('kpiCards');
+    if (kpiContainer) {
+      kpiContainer.innerHTML = stats.metrics.map(m => `
+        <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 hover:shadow-md transition-shadow">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-slate-500 dark:text-slate-400">${m.label}</p>
+              <p class="text-2xl font-bold text-slate-900 dark:text-white mt-1">${m.value}</p>
+            </div>
+            <div class="flex items-center gap-1 ${m.trend === 'up' ? 'text-emerald-600' : 'text-rose-600'} bg-${m.trend === 'up' ? 'emerald' : 'rose'}-50 dark:bg-${m.trend === 'up' ? 'emerald' : 'rose'}-900/20 px-2 py-1 rounded-lg">
+              <i data-lucide="${m.trend === 'up' ? 'trending-up' : 'trending-down'}" class="w-4 h-4"></i>
+              <span class="text-xs font-medium">${m.change > 0 ? '+' : ''}${m.change}%</span>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    const activities = await mockApi.getActivities(8);
+    const feedContainer = document.getElementById('activityFeed');
+    if (feedContainer) {
+      const activityIcons = { signup: 'user-plus', order: 'shopping-cart', payment: 'credit-card', upgrade: 'arrow-up-circle', ticket: 'ticket' };
+      const activityColors = { signup: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400', order: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400', payment: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400', upgrade: 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400', ticket: 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400' };
+      feedContainer.innerHTML = activities.map(a => `
+        <div class="flex items-start gap-3 p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+          <div class="w-8 h-8 rounded-full ${activityColors[a.type]} flex items-center justify-center flex-shrink-0">
+            <i data-lucide="${activityIcons[a.type]}" class="w-4 h-4"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm text-slate-900 dark:text-slate-100">${a.description}</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">${formatDate(a.createdAt, true)}</p>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    if (window.lucide) lucide.createIcons();
+    initDashboardCharts();
+  } catch (err) {
+    console.error('Dashboard load error:', err);
+  }
+}
+
+let revenueChartInstance = null;
+let trafficChartInstance = null;
+let userGrowthChartInstance = null;
+
+function initDashboardCharts() {
+  const isDark = document.documentElement.classList.contains('dark');
+
+  // Revenue Chart
+  const revenueCtx = document.getElementById('revenueChart');
+  if (revenueCtx) {
+    if (revenueChartInstance) revenueChartInstance.destroy();
+    const data = AppState.data.revenueData.slice(-30);
+    const gradient = revenueCtx.getContext('2d').createLinearGradient(0, 0, 0, 300);
+    gradient.addColorStop(0, 'rgba(79, 70, 229, 0.3)');
+    gradient.addColorStop(1, 'rgba(79, 70, 229, 0)');
+
+    revenueChartInstance = new Chart(revenueCtx, {
+      type: 'line',
+      data: {
+        labels: data.map(d => d.date.slice(5)),
+        datasets: [{
+          label: 'Revenue',
+          data: data.map(d => d.revenue),
+          borderColor: '#4f46e5',
+          backgroundColor: gradient,
+          fill: true,
+          tension: 0.4,
+          pointRadius: 0,
+          pointHoverRadius: 6,
+          pointHoverBackgroundColor: '#4f46e5',
+          pointHoverBorderColor: '#fff',
+          pointHoverBorderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { intersect: false, mode: 'index' },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: isDark ? '#1e293b' : '#fff',
+            titleColor: isDark ? '#f8fafc' : '#0f172a',
+            bodyColor: isDark ? '#94a3b8' : '#64748b',
+            borderColor: isDark ? '#334155' : '#e2e8f0',
+            borderWidth: 1,
+            padding: 12,
+            cornerRadius: 8,
+            displayColors: false,
+            callbacks: { label: (ctx) => `Revenue: $${ctx.parsed.y.toLocaleString()}` }
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { maxTicksLimit: 8, color: isDark ? '#64748b' : '#94a3b8' } },
+          y: { border: { display: false }, grid: { color: isDark ? '#334155' : '#f1f5f9' }, ticks: { color: isDark ? '#64748b' : '#94a3b8', callback: (v) => '$' + (v / 1000) + 'k' } }
+        }
+      }
+    });
+  }
+
+  // Traffic Chart
+  const trafficCtx = document.getElementById('trafficChart');
+  if (trafficCtx) {
+    if (trafficChartInstance) trafficChartInstance.destroy();
+    trafficChartInstance = new Chart(trafficCtx, {
+      type: 'doughnut',
+      data: {
+        labels: trafficSources.map(d => d.name),
+        datasets: [{
+          data: trafficSources.map(d => d.value),
+          backgroundColor: trafficSources.map(d => d.color),
+          borderWidth: 0,
+          hoverOffset: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '70%',
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { usePointStyle: true, pointStyle: 'circle', padding: 16, color: isDark ? '#94a3b8' : '#64748b' }
+          }
+        }
+      }
+    });
+  }
+
+  // User Growth Chart
+  const growthCtx = document.getElementById('userGrowthChart');
+  if (growthCtx) {
+    if (userGrowthChartInstance) userGrowthChartInstance.destroy();
+    const monthlyData = [];
+    for (let i = 0; i < 12; i++) {
+      const date = new Date();
+      date.setMonth(date.getMonth() - (11 - i));
+      const count = AppState.data.users.filter(u => new Date(u.joinedAt) <= date).length;
+      monthlyData.push({ month: date.toLocaleDateString('en-US', { month: 'short' }), users: count });
+    }
+
+    userGrowthChartInstance = new Chart(growthCtx, {
+      type: 'bar',
+      data: {
+        labels: monthlyData.map(d => d.month),
+        datasets: [{
+          label: 'Total Users',
+          data: monthlyData.map(d => d.users),
+          backgroundColor: '#4f46e5',
+          borderRadius: 4,
+          barThickness: 20
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: isDark ? '#1e293b' : '#fff',
+            titleColor: isDark ? '#f8fafc' : '#0f172a',
+            bodyColor: isDark ? '#94a3b8' : '#64748b',
+            borderColor: isDark ? '#334155' : '#e2e8f0',
+            borderWidth: 1,
+            padding: 12,
+            cornerRadius: 8
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: isDark ? '#64748b' : '#94a3b8' } },
+          y: { border: { display: false }, grid: { color: isDark ? '#334155' : '#f1f5f9' }, ticks: { color: isDark ? '#64748b' : '#94a3b8' } }
+        }
+      }
+    });
+  }
+}
+
+async function updateRevenueChart(range) {
+  AppState.ui.revenueRange = range;
+  const data = await mockApi.getRevenueData(range);
+  if (revenueChartInstance) {
+    revenueChartInstance.data.labels = data.map(d => d.date.slice(5));
+    revenueChartInstance.data.datasets[0].data = data.map(d => d.revenue);
+    revenueChartInstance.update('none');
+  }
+  // Update button styles
+  navigateTo('dashboard');
+  setTimeout(() => loadDashboardData(), 100);
+}
+
+function exportDashboard() {
+  const csv = 'Metric,Value,Change,Trend\n' + 
+    AppState.data.revenueData.map(d => `${d.date},${d.revenue},${d.orders},revenue`).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'dashboard-data.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Dashboard data exported', 'success');
+}
+
+// ==================== ANALYTICS PAGE ====================
+function renderAnalytics() {
+  return `
+    <div class="space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Analytics</h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Deep dive into your business metrics</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <select id="analyticsRange" onchange="updateAnalytics()" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+            <option value="7d">Last 7 days</option>
+            <option value="30d" selected>Last 30 days</option>
+            <option value="90d">Last 90 days</option>
+            <option value="1y">Last year</option>
+          </select>
+          <button onclick="exportAnalytics()" class="px-4 py-2 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
+            <i data-lucide="download" class="w-4 h-4"></i>
+            <span class="hidden sm:inline">Export</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+          <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Sales by Category</h3>
+          <div class="chart-container">
+            <canvas id="salesCategoryChart"></canvas>
+          </div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+          <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Conversion Funnel</h3>
+          <div id="funnelChart" class="space-y-3">
+            ${renderFunnel()}
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+        <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Geographic Distribution</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="chart-container" style="height: 300px;">
+            <canvas id="geoChart"></canvas>
+          </div>
+          <div class="space-y-3 overflow-y-auto max-h-[300px]">
+            ${renderGeoList()}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderFunnel() {
+  const stages = [
+    { name: 'Visitors', value: 15000, color: 'bg-indigo-500' },
+    { name: 'Signups', value: 3200, color: 'bg-blue-500' },
+    { name: 'Active Users', value: 2100, color: 'bg-cyan-500' },
+    { name: 'Paid Users', value: 850, color: 'bg-emerald-500' }
+  ];
+  const max = stages[0].value;
+  return stages.map((s, i) => {
+    const pct = (s.value / max) * 100;
+    const prevPct = i > 0 ? (stages[i].value / stages[i-1].value) * 100 : 100;
+    return `
+      <div class="relative">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-sm font-medium text-slate-700 dark:text-slate-300">${s.name}</span>
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-bold text-slate-900 dark:text-white">${s.value.toLocaleString()}</span>
+            ${i > 0 ? `<span class="text-xs text-slate-500 dark:text-slate-400">${prevPct.toFixed(1)}% conversion</span>` : ''}
+          </div>
+        </div>
+        <div class="h-8 bg-slate-100 dark:bg-slate-700 rounded-lg overflow-hidden">
+          <div class="h-full ${s.color} rounded-lg transition-all duration-1000 flex items-center justify-end px-3" style="width: ${pct}%; min-width: 60px;">
+            <span class="text-xs font-medium text-white">${pct.toFixed(1)}%</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderGeoList() {
+  const geoData = [
+    { country: 'United States', users: 4520, flag: '🇺🇸' },
+    { country: 'United Kingdom', users: 1280, flag: '🇬🇧' },
+    { country: 'Canada', users: 890, flag: '🇨🇦' },
+    { country: 'Germany', users: 760, flag: '🇩🇪' },
+    { country: 'France', users: 650, flag: '🇫🇷' },
+    { country: 'Australia', users: 540, flag: '🇦🇺' },
+    { country: 'Japan', users: 480, flag: '🇯🇵' },
+    { country: 'Brazil', users: 420, flag: '🇧🇷' },
+    { country: 'India', users: 380, flag: '🇮🇳' },
+    { country: 'Netherlands', users: 290, flag: '🇳🇱' }
+  ];
+  const total = geoData.reduce((a, b) => a + b.users, 0);
+  return geoData.map(g => `
+    <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+      <span class="text-lg">${g.flag}</span>
+      <div class="flex-1">
+        <div class="flex items-center justify-between">
+          <span class="text-sm font-medium text-slate-900 dark:text-white">${g.country}</span>
+          <span class="text-sm text-slate-500 dark:text-slate-400">${g.users.toLocaleString()}</span>
+        </div>
+        <div class="mt-1 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+          <div class="h-full bg-indigo-500 rounded-full" style="width: ${(g.users / total * 100).toFixed(1)}%"></div>
+        </div>
+      </div>
+      <span class="text-xs text-slate-500 dark:text-slate-400 w-12 text-right">${(g.users / total * 100).toFixed(1)}%</span>
+    </div>
+  `).join('');
+}
+
+function initAnalyticsCharts() {
+  const isDark = document.documentElement.classList.contains('dark');
+
+  // Sales by Category
+  const salesCtx = document.getElementById('salesCategoryChart');
+  if (salesCtx) {
+    const categories = {};
+    AppState.data.products.forEach(p => {
+      categories[p.category] = (categories[p.category] || 0) + p.sales * p.price;
+    });
+    new Chart(salesCtx, {
+      type: 'bar',
+      data: {
+        labels: Object.keys(categories),
+        datasets: [{
+          label: 'Revenue',
+          data: Object.values(categories),
+          backgroundColor: ['#4f46e5', '#10b981', '#f59e0b', '#3b82f6', '#8b5cf6', '#ef4444'],
+          borderRadius: 6,
+          barThickness: 40
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: isDark ? '#1e293b' : '#fff',
+            titleColor: isDark ? '#f8fafc' : '#0f172a',
+            bodyColor: isDark ? '#94a3b8' : '#64748b',
+            borderColor: isDark ? '#334155' : '#e2e8f0',
+            borderWidth: 1,
+            padding: 12,
+            callbacks: { label: (ctx) => `Revenue: $${ctx.parsed.y.toLocaleString()}` }
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: isDark ? '#64748b' : '#94a3b8' } },
+          y: { border: { display: false }, grid: { color: isDark ? '#334155' : '#f1f5f9' }, ticks: { color: isDark ? '#64748b' : '#94a3b8', callback: (v) => '$' + (v / 1000) + 'k' } }
+        }
+      }
+    });
+  }
+
+  // Geographic Chart
+  const geoCtx = document.getElementById('geoChart');
+  if (geoCtx) {
+    new Chart(geoCtx, {
+      type: 'polarArea',
+      data: {
+        labels: ['US', 'UK', 'CA', 'DE', 'FR', 'AU', 'JP'],
+        datasets: [{
+          data: [4520, 1280, 890, 760, 650, 540, 480],
+          backgroundColor: ['rgba(79,70,229,0.7)', 'rgba(16,185,129,0.7)', 'rgba(245,158,11,0.7)', 'rgba(59,130,246,0.7)', 'rgba(139,92,246,0.7)', 'rgba(239,68,68,0.7)', 'rgba(236,72,153,0.7)'],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: { color: isDark ? '#94a3b8' : '#64748b', padding: 16, usePointStyle: true }
+          }
+        },
+        scales: {
+          r: { grid: { color: isDark ? '#334155' : '#e2e8f0' }, ticks: { display: false, backdropColor: 'transparent' } }
+        }
+      }
+    });
+  }
+}
+
+function updateAnalytics() {
+  const range = document.getElementById('analyticsRange').value;
+  showToast(`Analytics updated for ${range}`, 'info');
+}
+
+function exportAnalytics() {
+  showToast('Analytics report exported', 'success');
+}
+
+// ==================== USERS PAGE ====================
+function renderUsers() {
+  const t = AppState.tables.users;
+  return `
+    <div class="space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Users</h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Manage your team and customers</p>
+        </div>
+        <button onclick="showAddUserModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
+          <i data-lucide="user-plus" class="w-4 h-4"></i>
+          Add User
+        </button>
+      </div>
+
+      <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+        <div class="flex flex-col sm:flex-row gap-3">
+          <div class="relative flex-1">
+            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            <input type="text" id="userSearch" value="${t.search}" placeholder="Search users..." 
+              class="w-full pl-9 pr-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+              oninput="debounceUserSearch(this.value)">
+          </div>
+          <div class="flex gap-2">
+            <select id="userRoleFilter" onchange="filterUsers('role', this.value)" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+              <option value="">All Roles</option>
+              <option value="admin">Admin</option>
+              <option value="editor">Editor</option>
+              <option value="user">User</option>
+            </select>
+            <select id="userStatusFilter" onchange="filterUsers('status', this.value)" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+              <option value="">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="pending">Pending</option>
+            </select>
+            <select id="userPlanFilter" onchange="filterUsers('plan', this.value)" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+              <option value="">All Plans</option>
+              <option value="free">Free</option>
+              <option value="pro">Pro</option>
+              <option value="enterprise">Enterprise</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div id="usersTableContainer">
+        ${Skeleton(1, 'h-96')}
+      </div>
+    </div>
+  `;
+}
+
+let userSearchTimeout;
+function debounceUserSearch(value) {
+  clearTimeout(userSearchTimeout);
+  userSearchTimeout = setTimeout(() => {
+    AppState.tables.users.search = value;
+    AppState.tables.users.page = 1;
+    loadUsersTable();
+  }, 300);
+}
+
+function filterUsers(key, value) {
+  AppState.tables.users.filters[key] = value || null;
+  AppState.tables.users.page = 1;
+  loadUsersTable();
+}
+
+async function loadUsersTable() {
+  const container = document.getElementById('usersTableContainer');
+  if (!container) return;
+
+  const t = AppState.tables.users;
+  try {
+    const result = await mockApi.getUsers(t.page, t.limit, t.search, t.sort, t.order, t.filters);
+
+    const columns = [
+      { key: 'user', label: 'User', sortable: false, render: (u) => `
+        <div class="flex items-center gap-3">
+          <img src="${u.avatar}" alt="${u.name}" class="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700 object-cover" onerror="this.src='https://api.dicebear.com/9.x/avataaars/svg?seed=${u.name}'">
+          <div>
+            <p class="text-sm font-medium text-slate-900 dark:text-white">${u.name}</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">${u.email}</p>
+          </div>
+        </div>
+      `},
+      { key: 'role', label: 'Role', sortable: true, render: (u) => Badge(u.role, u.role) },
+      { key: 'status', label: 'Status', sortable: true, render: (u) => Badge(u.status, u.status) },
+      { key: 'plan', label: 'Plan', sortable: true, render: (u) => Badge(u.plan, u.plan) },
+      { key: 'lastActive', label: 'Last Active', sortable: true, render: (u) => `<span class="text-slate-500 dark:text-slate-400">${formatDate(u.lastActive, true)}</span>` },
+      { key: 'joinedAt', label: 'Joined', sortable: true, render: (u) => `<span class="text-slate-500 dark:text-slate-400">${formatDate(u.joinedAt)}</span>` },
+      { key: 'actions', label: '', sortable: false, render: (u) => `
+        <div class="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onclick="viewUser('${u.id}')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors" title="View">
+            <i data-lucide="eye" class="w-4 h-4 text-slate-500"></i>
+          </button>
+          <button onclick="editUser('${u.id}')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors" title="Edit">
+            <i data-lucide="pencil" class="w-4 h-4 text-slate-500"></i>
+          </button>
+          <button onclick="confirmDeleteUser('${u.id}')" class="p-1.5 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded-lg transition-colors" title="Delete">
+            <i data-lucide="trash-2" class="w-4 h-4 text-rose-500"></i>
+          </button>
+        </div>
+      `}
+    ];
+
+    container.innerHTML = renderDataTable(result.users, columns, { page: result.page, pages: result.pages, total: result.total, sort: t.sort, order: t.order });
+    if (window.lucide) lucide.createIcons();
+  } catch (err) {
+    container.innerHTML = `<div class="text-center py-8 text-rose-500">Error loading users: ${err.message}</div>`;
+  }
+}
+
+function renderDataTable(data, columns, pagination) {
+  return `
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left">
+          <thead class="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
+            <tr>
+              ${columns.map(col => `
+                <th class="px-6 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider ${col.sortable ? 'cursor-pointer hover:text-slate-700 dark:hover:text-slate-300 select-none' : ''}" 
+                    ${col.sortable ? `onclick="sortTable('${col.key}')"` : ''}>
+                  <div class="flex items-center gap-1">
+                    ${col.label}
+                    ${col.sortable ? `<i data-lucide="arrow-up-down" class="w-3 h-3 ${pagination.sort === col.key ? 'text-indigo-500' : 'text-slate-400'}"></i>` : ''}
+                  </div>
+                </th>
+              `).join('')}
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+            ${data.length === 0 ? `
+              <tr>
+                <td colspan="${columns.length}" class="px-6 py-12 text-center">
+                  <div class="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <i data-lucide="search-x" class="w-8 h-8 text-slate-400"></i>
+                  </div>
+                  <p class="text-sm text-slate-500 dark:text-slate-400">No results found</p>
+                </td>
+              </tr>
+            ` : data.map(row => `
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors group">
+                ${columns.map(col => `
+                  <td class="px-6 py-4 whitespace-nowrap ${col.key === 'actions' ? 'text-right' : ''}">
+                    ${col.render ? col.render(row) : `<span class="text-sm text-slate-900 dark:text-slate-100">${row[col.key] || '-'}</span>`}
+                  </td>
+                `).join('')}
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      ${pagination.total > 0 ? renderPagination(pagination.page, pagination.pages, pagination.total, 'users') : ''}
+    </div>
+  `;
+}
+
+function renderPagination(page, pages, total, tableKey) {
+  const start = (page - 1) * 10 + 1;
+  const end = Math.min(page * 10, total);
+  const maxButtons = 5;
+  let startPage = Math.max(1, page - Math.floor(maxButtons / 2));
+  let endPage = Math.min(pages, startPage + maxButtons - 1);
+  if (endPage - startPage < maxButtons - 1) startPage = Math.max(1, endPage - maxButtons + 1);
+
+  return `
+    <div class="flex flex-col sm:flex-row items-center justify-between px-6 py-4 border-t border-slate-200 dark:border-slate-700 gap-3">
+      <p class="text-sm text-slate-500 dark:text-slate-400">
+        Showing <span class="font-medium text-slate-900 dark:text-white">${start}</span> to <span class="font-medium text-slate-900 dark:text-white">${end}</span> of <span class="font-medium text-slate-900 dark:text-white">${total}</span> results
+      </p>
+      <div class="flex items-center gap-1">
+        <button onclick="changePage('${tableKey}', ${page - 1})" ${page === 1 ? 'disabled' : ''} 
+          class="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+          <i data-lucide="chevron-left" class="w-4 h-4 text-slate-600 dark:text-slate-400"></i>
+        </button>
+        ${startPage > 1 ? `<button onclick="changePage('${tableKey}', 1)" class="w-8 h-8 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">1</button><span class="px-1 text-slate-400">...</span>` : ''}
+        ${Array.from({ length: endPage - startPage + 1 }, (_, i) => {
+          const p = startPage + i;
+          return `<button onclick="changePage('${tableKey}', ${p})" class="w-8 h-8 rounded-lg text-sm font-medium transition-colors ${p === page ? 'bg-indigo-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}">${p}</button>`;
+        }).join('')}
+        ${endPage < pages ? `<span class="px-1 text-slate-400">...</span><button onclick="changePage('${tableKey}', ${pages})" class="w-8 h-8 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">${pages}</button>` : ''}
+        <button onclick="changePage('${tableKey}', ${page + 1})" ${page === pages ? 'disabled' : ''} 
+          class="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+          <i data-lucide="chevron-right" class="w-4 h-4 text-slate-600 dark:text-slate-400"></i>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function sortTable(key) {
+  const page = AppState.ui.currentPage;
+  const t = AppState.tables[page] || AppState.tables.users;
+  if (t.sort === key) {
+    t.order = t.order === 'asc' ? 'desc' : 'asc';
+  } else {
+    t.sort = key;
+    t.order = 'asc';
+  }
+  if (page === 'users') loadUsersTable();
+  else if (page === 'products') loadProductsTable();
+  else if (page === 'orders') loadOrdersTable();
+}
+
+function changePage(tableKey, page) {
+  AppState.tables[tableKey].page = page;
+  if (tableKey === 'users') loadUsersTable();
+  else if (tableKey === 'products') loadProductsTable();
+  else if (tableKey === 'orders') loadOrdersTable();
+}
+
+function viewUser(id) {
+  const user = AppState.data.users.find(u => u.id === id);
+  if (!user) return;
+  showModal(user.name, `
+    <div class="flex items-center gap-4 mb-6">
+      <img src="${user.avatar}" alt="${user.name}" class="w-16 h-16 rounded-full bg-slate-200 dark:bg-slate-700 object-cover">
+      <div>
+        <h4 class="text-lg font-semibold text-slate-900 dark:text-white">${user.name}</h4>
+        <p class="text-sm text-slate-500 dark:text-slate-400">${user.email}</p>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-4">
+      <div class="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+        <p class="text-xs text-slate-500 dark:text-slate-400 uppercase">Role</p>
+        <p class="text-sm font-medium text-slate-900 dark:text-white mt-1">${Badge(user.role, user.role)}</p>
+      </div>
+      <div class="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+        <p class="text-xs text-slate-500 dark:text-slate-400 uppercase">Status</p>
+        <p class="text-sm font-medium text-slate-900 dark:text-white mt-1">${Badge(user.status, user.status)}</p>
+      </div>
+      <div class="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+        <p class="text-xs text-slate-500 dark:text-slate-400 uppercase">Plan</p>
+        <p class="text-sm font-medium text-slate-900 dark:text-white mt-1">${Badge(user.plan, user.plan)}</p>
+      </div>
+      <div class="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+        <p class="text-xs text-slate-500 dark:text-slate-400 uppercase">Joined</p>
+        <p class="text-sm font-medium text-slate-900 dark:text-white mt-1">${formatDate(user.joinedAt)}</p>
+      </div>
+    </div>
+    <div class="mt-4 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+      <p class="text-xs text-slate-500 dark:text-slate-400 uppercase">Bio</p>
+      <p class="text-sm text-slate-700 dark:text-slate-300 mt-1">${user.bio || 'No bio available'}</p>
+    </div>
+  `);
+}
+
+function editUser(id) {
+  const user = AppState.data.users.find(u => u.id === id);
+  if (!user) return;
+  showModal('Edit User', `
+    <form id="editUserForm" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Name</label>
+        <input type="text" id="editName" value="${user.name}" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email</label>
+        <input type="email" id="editEmail" value="${user.email}" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Role</label>
+          <select id="editRole" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+            <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
+            <option value="editor" ${user.role === 'editor' ? 'selected' : ''}>Editor</option>
+            <option value="user" ${user.role === 'user' ? 'selected' : ''}>User</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Status</label>
+          <select id="editStatus" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+            <option value="active" ${user.status === 'active' ? 'selected' : ''}>Active</option>
+            <option value="inactive" ${user.status === 'inactive' ? 'selected' : ''}>Inactive</option>
+            <option value="pending" ${user.status === 'pending' ? 'selected' : ''}>Pending</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Plan</label>
+        <select id="editPlan" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <option value="free" ${user.plan === 'free' ? 'selected' : ''}>Free</option>
+          <option value="pro" ${user.plan === 'pro' ? 'selected' : ''}>Pro</option>
+          <option value="enterprise" ${user.plan === 'enterprise' ? 'selected' : ''}>Enterprise</option>
+        </select>
+      </div>
+    </form>
+  `, `saveUserEdit('${id}')`);
+}
+
+async function saveUserEdit(id) {
+  const name = document.getElementById('editName').value;
+  const email = document.getElementById('editEmail').value;
+  const role = document.getElementById('editRole').value;
+  const status = document.getElementById('editStatus').value;
+  const plan = document.getElementById('editPlan').value;
+
+  try {
+    await mockApi.updateUser(id, { name, email, role, status, plan });
+    showToast('User updated successfully', 'success');
+    loadUsersTable();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+function confirmDeleteUser(id) {
+  const user = AppState.data.users.find(u => u.id === id);
+  showModal('Delete User', `
+    <div class="text-center">
+      <div class="w-12 h-12 bg-rose-100 dark:bg-rose-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+        <i data-lucide="alert-triangle" class="w-6 h-6 text-rose-600 dark:text-rose-400"></i>
+      </div>
+      <h4 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">Delete ${user.name}?</h4>
+      <p class="text-sm text-slate-500 dark:text-slate-400">This action cannot be undone. The user will be permanently removed from the system.</p>
+    </div>
+  `, `deleteUserConfirmed('${id}')`);
+}
+
+async function deleteUserConfirmed(id) {
+  try {
+    await mockApi.deleteUser(id);
+    showToast('User deleted successfully', 'success');
+    loadUsersTable();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+function showAddUserModal() {
+  showModal('Add User', `
+    <form id="addUserForm" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Full Name</label>
+        <input type="text" id="addName" required class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="John Doe">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email</label>
+        <input type="email" id="addEmail" required class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="john@example.com">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Role</label>
+          <select id="addRole" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+            <option value="user">User</option>
+            <option value="editor">Editor</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Plan</label>
+          <select id="addPlan" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+            <option value="free">Free</option>
+            <option value="pro">Pro</option>
+            <option value="enterprise">Enterprise</option>
+          </select>
+        </div>
+      </div>
+    </form>
+  `, `saveNewUser()`);
+}
+
+async function saveNewUser() {
+  const name = document.getElementById('addName').value;
+  const email = document.getElementById('addEmail').value;
+  const role = document.getElementById('addRole').value;
+  const plan = document.getElementById('addPlan').value;
+
+  if (!name || !email) {
+    showToast('Please fill in all required fields', 'error');
+    return;
+  }
+
+  try {
+    const newUser = {
+      id: `usr_${Math.random().toString(36).substr(2, 9)}`,
+      name, email, role, plan, status: 'active',
+      avatar: `https://api.dicebear.com/9.x/avataaars/svg?seed=${name}&backgroundColor=b6e3f4`,
+      lastActive: new Date().toISOString(),
+      joinedAt: new Date().toISOString(),
+      bio: '', timezone: 'America/New_York', language: 'en'
+    };
+    AppState.data.users.unshift(newUser);
+    showToast('User created successfully', 'success');
+    loadUsersTable();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+// ==================== PRODUCTS PAGE ====================
+function renderProducts() {
+  return `
+    <div class="space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Products</h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Manage your inventory and catalog</p>
+        </div>
+        <button onclick="showAddProductModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          Add Product
+        </button>
+      </div>
+
+      <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+        <div class="flex flex-col sm:flex-row gap-3">
+          <div class="relative flex-1">
+            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            <input type="text" id="productSearch" placeholder="Search products..." 
+              class="w-full pl-9 pr-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+              oninput="debounceProductSearch(this.value)">
+          </div>
+          <select id="productCategoryFilter" onchange="filterProducts('category', this.value)" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+            <option value="">All Categories</option>
+            <option value="Electronics">Electronics</option>
+            <option value="Office">Office</option>
+            <option value="Accessories">Accessories</option>
+            <option value="Furniture">Furniture</option>
+            <option value="Health">Health</option>
+            <option value="Software">Software</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="productsTableContainer">
+        ${Skeleton(1, 'h-96')}
+      </div>
+    </div>
+  `;
+}
+
+let productSearchTimeout;
+function debounceProductSearch(value) {
+  clearTimeout(productSearchTimeout);
+  productSearchTimeout = setTimeout(() => {
+    AppState.tables.products.search = value;
+    AppState.tables.products.page = 1;
+    loadProductsTable();
+  }, 300);
+}
+
+function filterProducts(key, value) {
+  AppState.tables.products.filters = { [key]: value || null };
+  AppState.tables.products.page = 1;
+  loadProductsTable();
+}
+
+async function loadProductsTable() {
+  const container = document.getElementById('productsTableContainer');
+  if (!container) return;
+
+  const t = AppState.tables.products;
+  let filtered = [...AppState.data.products];
+  if (t.search) {
+    const s = t.search.toLowerCase();
+    filtered = filtered.filter(p => p.name.toLowerCase().includes(s) || p.sku.toLowerCase().includes(s));
+  }
+  if (t.filters?.category) filtered = filtered.filter(p => p.category === t.filters.category);
+
+  filtered.sort((a, b) => {
+    let aVal = a[t.sort], bVal = b[t.sort];
+    if (typeof aVal === 'string') { aVal = aVal.toLowerCase(); bVal = bVal.toLowerCase(); }
+    return t.order === 'asc' ? (aVal > bVal ? 1 : -1) : (aVal < bVal ? 1 : -1);
+  });
+
+  const total = filtered.length;
+  const pages = Math.ceil(total / t.limit);
+  const start = (t.page - 1) * t.limit;
+  const pageData = filtered.slice(start, start + t.limit);
+
+  const columns = [
+    { key: 'product', label: 'Product', sortable: false, render: (p) => `
+      <div class="flex items-center gap-3">
+        <img src="${p.image}" alt="${p.name}" class="w-10 h-10 rounded-lg bg-slate-200 dark:bg-slate-700 object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+        <div class="w-10 h-10 rounded-lg bg-slate-200 dark:bg-slate-700 items-center justify-center hidden">
+          <i data-lucide="package" class="w-5 h-5 text-slate-400"></i>
+        </div>
+        <div>
+          <p class="text-sm font-medium text-slate-900 dark:text-white">${p.name}</p>
+          <p class="text-xs text-slate-500 dark:text-slate-400">${p.sku}</p>
+        </div>
+      </div>
+    `},
+    { key: 'category', label: 'Category', sortable: true, render: (p) => `<span class="text-sm text-slate-600 dark:text-slate-400">${p.category}</span>` },
+    { key: 'price', label: 'Price', sortable: true, render: (p) => `<span class="text-sm font-medium text-slate-900 dark:text-white">${formatCurrency(p.price)}</span>` },
+    { key: 'stock', label: 'Stock', sortable: true, render: (p) => `
+      <div class="flex items-center gap-2">
+        <span class="text-sm ${p.stock > 50 ? 'text-emerald-600' : p.stock > 10 ? 'text-amber-600' : 'text-rose-600'}">${p.stock}</span>
+        <span class="w-2 h-2 rounded-full ${p.stock > 50 ? 'bg-emerald-500' : p.stock > 10 ? 'bg-amber-500' : 'bg-rose-500'}"></span>
+      </div>
+    ` },
+    { key: 'status', label: 'Status', sortable: true, render: (p) => Badge(p.status, p.status === 'active' ? 'active' : p.status === 'draft' ? 'pending' : 'inactive') },
+    { key: 'sales', label: 'Sales', sortable: true, render: (p) => `<span class="text-sm text-slate-600 dark:text-slate-400">${p.sales.toLocaleString()}</span>` },
+    { key: 'actions', label: '', sortable: false, render: (p) => `
+      <div class="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+        <button onclick="editProduct('${p.id}')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors" title="Edit">
+          <i data-lucide="pencil" class="w-4 h-4 text-slate-500"></i>
+        </button>
+        <button onclick="confirmDeleteProduct('${p.id}')" class="p-1.5 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded-lg transition-colors" title="Delete">
+          <i data-lucide="trash-2" class="w-4 h-4 text-rose-500"></i>
+        </button>
+      </div>
+    `}
+  ];
+
+  container.innerHTML = renderDataTable(pageData, columns, { page: t.page, pages, total, sort: t.sort, order: t.order });
+  if (window.lucide) lucide.createIcons();
+}
+
+function showAddProductModal() {
+  showModal('Add Product', `
+    <form id="addProductForm" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Product Name</label>
+        <input type="text" id="addProductName" required class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Product name">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Category</label>
+          <select id="addProductCategory" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+            <option value="Electronics">Electronics</option>
+            <option value="Office">Office</option>
+            <option value="Accessories">Accessories</option>
+            <option value="Furniture">Furniture</option>
+            <option value="Health">Health</option>
+            <option value="Software">Software</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Price</label>
+          <input type="number" id="addProductPrice" required step="0.01" min="0" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="0.00">
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Stock</label>
+          <input type="number" id="addProductStock" required min="0" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="0">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Status</label>
+          <select id="addProductStatus" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+            <option value="active">Active</option>
+            <option value="draft">Draft</option>
+            <option value="archived">Archived</option>
+          </select>
+        </div>
+      </div>
+    </form>
+  `, `saveNewProduct()`);
+}
+
+async function saveNewProduct() {
+  const name = document.getElementById('addProductName').value;
+  const category = document.getElementById('addProductCategory').value;
+  const price = parseFloat(document.getElementById('addProductPrice').value);
+  const stock = parseInt(document.getElementById('addProductStock').value);
+  const status = document.getElementById('addProductStatus').value;
+
+  if (!name || isNaN(price) || isNaN(stock)) {
+    showToast('Please fill in all required fields', 'error');
+    return;
+  }
+
+  const newProduct = {
+    id: `prd_${Math.random().toString(36).substr(2, 9)}`,
+    name, sku: `${category.slice(0,3).toUpperCase()}-2026-${String(AppState.data.products.length + 1).padStart(3, '0')}`,
+    description: `Premium ${name.toLowerCase()} with advanced features.`,
+    category, price, stock, status,
+    image: `https://placehold.co/400x400/4f46e5/ffffff?text=${encodeURIComponent(name.slice(0, 10))}`,
+    sales: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+  };
+  AppState.data.products.unshift(newProduct);
+  showToast('Product created successfully', 'success');
+  loadProductsTable();
+}
+
+function editProduct(id) {
+  const product = AppState.data.products.find(p => p.id === id);
+  if (!product) return;
+  showModal('Edit Product', `
+    <form id="editProductForm" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Product Name</label>
+        <input type="text" id="editProductName" value="${product.name}" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Price</label>
+          <input type="number" id="editProductPrice" value="${product.price}" step="0.01" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Stock</label>
+          <input type="number" id="editProductStock" value="${product.stock}" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Status</label>
+        <select id="editProductStatus" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <option value="active" ${product.status === 'active' ? 'selected' : ''}>Active</option>
+          <option value="draft" ${product.status === 'draft' ? 'selected' : ''}>Draft</option>
+          <option value="archived" ${product.status === 'archived' ? 'selected' : ''}>Archived</option>
+        </select>
+      </div>
+    </form>
+  `, `saveProductEdit('${id}')`);
+}
+
+async function saveProductEdit(id) {
+  const product = AppState.data.products.find(p => p.id === id);
+  if (product) {
+    product.name = document.getElementById('editProductName').value;
+    product.price = parseFloat(document.getElementById('editProductPrice').value);
+    product.stock = parseInt(document.getElementById('editProductStock').value);
+    product.status = document.getElementById('editProductStatus').value;
+    product.updatedAt = new Date().toISOString();
+    showToast('Product updated successfully', 'success');
+    loadProductsTable();
+  }
+}
+
+function confirmDeleteProduct(id) {
+  const product = AppState.data.products.find(p => p.id === id);
+  showModal('Delete Product', `
+    <div class="text-center">
+      <div class="w-12 h-12 bg-rose-100 dark:bg-rose-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+        <i data-lucide="alert-triangle" class="w-6 h-6 text-rose-600 dark:text-rose-400"></i>
+      </div>
+      <h4 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">Delete ${product.name}?</h4>
+      <p class="text-sm text-slate-500 dark:text-slate-400">This action cannot be undone.</p>
+    </div>
+  `, `deleteProductConfirmed('${id}')`);
+}
+
+async function deleteProductConfirmed(id) {
+  const idx = AppState.data.products.findIndex(p => p.id === id);
+  if (idx > -1) {
+    AppState.data.products.splice(idx, 1);
+    showToast('Product deleted successfully', 'success');
+    loadProductsTable();
+  }
+}
+
+// ==================== ORDERS PAGE ====================
+function renderOrders() {
+  return `
+    <div class="space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Orders</h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Track and manage customer orders</p>
+        </div>
+        <button onclick="exportOrders()" class="px-4 py-2 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
+          <i data-lucide="download" class="w-4 h-4"></i>
+          Export
+        </button>
+      </div>
+
+      <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+        <div class="flex flex-col sm:flex-row gap-3">
+          <div class="relative flex-1">
+            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            <input type="text" id="orderSearch" placeholder="Search orders..." 
+              class="w-full pl-9 pr-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+              oninput="debounceOrderSearch(this.value)">
+          </div>
+          <select id="orderStatusFilter" onchange="filterOrders('status', this.value)" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+            <option value="">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="processing">Processing</option>
+            <option value="shipped">Shipped</option>
+            <option value="delivered">Delivered</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="ordersTableContainer">
+        ${Skeleton(1, 'h-96')}
+      </div>
+    </div>
+  `;
+}
+
+let orderSearchTimeout;
+function debounceOrderSearch(value) {
+  clearTimeout(orderSearchTimeout);
+  orderSearchTimeout = setTimeout(() => {
+    AppState.tables.orders.search = value;
+    AppState.tables.orders.page = 1;
+    loadOrdersTable();
+  }, 300);
+}
+
+function filterOrders(key, value) {
+  AppState.tables.orders.filters = { [key]: value || null };
+  AppState.tables.orders.page = 1;
+  loadOrdersTable();
+}
+
+async function loadOrdersTable() {
+  const container = document.getElementById('ordersTableContainer');
+  if (!container) return;
+
+  const t = AppState.tables.orders;
+  let filtered = [...AppState.data.orders];
+  if (t.search) {
+    const s = t.search.toLowerCase();
+    filtered = filtered.filter(o => o.id.toLowerCase().includes(s) || o.customerName.toLowerCase().includes(s));
+  }
+  if (t.filters?.status) filtered = filtered.filter(o => o.status === t.filters.status);
+
+  filtered.sort((a, b) => {
+    let aVal = a[t.sort], bVal = b[t.sort];
+    if (t.sort === 'createdAt') { aVal = new Date(aVal); bVal = new Date(bVal); }
+    return t.order === 'asc' ? (aVal > bVal ? 1 : -1) : (aVal < bVal ? 1 : -1);
+  });
+
+  const total = filtered.length;
+  const pages = Math.ceil(total / t.limit);
+  const start = (t.page - 1) * t.limit;
+  const pageData = filtered.slice(start, start + t.limit);
+
+  const columns = [
+    { key: 'id', label: 'Order ID', sortable: true, render: (o) => `<span class="text-sm font-mono font-medium text-slate-900 dark:text-white">${o.id}</span>` },
+    { key: 'customer', label: 'Customer', sortable: true, render: (o) => `
+      <div>
+        <p class="text-sm font-medium text-slate-900 dark:text-white">${o.customerName}</p>
+        <p class="text-xs text-slate-500 dark:text-slate-400">${o.customerEmail}</p>
+      </div>
+    `},
+    { key: 'date', label: 'Date', sortable: true, render: (o) => `<span class="text-sm text-slate-600 dark:text-slate-400">${formatDate(o.createdAt)}</span>` },
+    { key: 'total', label: 'Total', sortable: true, render: (o) => `<span class="text-sm font-medium text-slate-900 dark:text-white">${formatCurrency(o.total)}</span>` },
+    { key: 'status', label: 'Status', sortable: true, render: (o) => Badge(o.status, o.status + '_order') },
+    { key: 'items', label: 'Items', sortable: false, render: (o) => `<span class="text-sm text-slate-600 dark:text-slate-400">${o.items.length} item${o.items.length > 1 ? 's' : ''}</span>` },
+    { key: 'actions', label: '', sortable: false, render: (o) => `
+      <div class="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+        <button onclick="viewOrder('${o.id}')" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors" title="View">
+          <i data-lucide="eye" class="w-4 h-4 text-slate-500"></i>
+        </button>
+        ${o.status !== 'delivered' && o.status !== 'cancelled' ? `
+        <button onclick="updateOrderStatus('${o.id}')" class="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg transition-colors" title="Update Status">
+          <i data-lucide="refresh-cw" class="w-4 h-4 text-blue-500"></i>
+        </button>
+        ` : ''}
+      </div>
+    `}
+  ];
+
+  container.innerHTML = renderDataTable(pageData, columns, { page: t.page, pages, total, sort: t.sort, order: t.order });
+  if (window.lucide) lucide.createIcons();
+}
+
+function viewOrder(id) {
+  const order = AppState.data.orders.find(o => o.id === id);
+  if (!order) return;
+  showModal(`Order ${order.id}`, `
+    <div class="space-y-4">
+      <div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+        <div>
+          <p class="text-xs text-slate-500 dark:text-slate-400 uppercase">Status</p>
+          <p class="mt-1">${Badge(order.status, order.status + '_order')}</p>
+        </div>
+        <div class="text-right">
+          <p class="text-xs text-slate-500 dark:text-slate-400 uppercase">Total</p>
+          <p class="text-lg font-bold text-slate-900 dark:text-white">${formatCurrency(order.total)}</p>
+        </div>
+      </div>
+      <div>
+        <p class="text-xs text-slate-500 dark:text-slate-400 uppercase mb-2">Customer</p>
+        <div class="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+          <div class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+            <span class="text-sm font-medium text-indigo-600 dark:text-indigo-400">${getInitials(order.customerName)}</span>
+          </div>
+          <div>
+            <p class="text-sm font-medium text-slate-900 dark:text-white">${order.customerName}</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">${order.customerEmail}</p>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p class="text-xs text-slate-500 dark:text-slate-400 uppercase mb-2">Items</p>
+        <div class="space-y-2">
+          ${order.items.map(item => `
+            <div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-600 flex items-center justify-center">
+                  <i data-lucide="package" class="w-4 h-4 text-slate-400"></i>
+                </div>
+                <div>
+                  <p class="text-sm font-medium text-slate-900 dark:text-white">${item.productName}</p>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">Qty: ${item.quantity}</p>
+                </div>
+              </div>
+              <span class="text-sm font-medium text-slate-900 dark:text-white">${formatCurrency(item.price * item.quantity)}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      <div>
+        <p class="text-xs text-slate-500 dark:text-slate-400 uppercase mb-2">Shipping Address</p>
+        <p class="text-sm text-slate-700 dark:text-slate-300">${order.shippingAddress.street}, ${order.shippingAddress.city}, ${order.shippingAddress.state} ${order.shippingAddress.zip}</p>
+      </div>
+      <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+        <span>Created: ${formatDate(order.createdAt)}</span>
+        <span>Updated: ${formatDate(order.updatedAt)}</span>
+      </div>
+    </div>
+  `);
+}
+
+function updateOrderStatus(id) {
+  const order = AppState.data.orders.find(o => o.id === id);
+  const nextStatus = { pending: 'processing', processing: 'shipped', shipped: 'delivered' }[order.status];
+  showModal('Update Order Status', `
+    <div class="text-center">
+      <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Change status from ${Badge(order.status, order.status + '_order')} to ${Badge(nextStatus, nextStatus + '_order')}?</p>
+    </div>
+  `, `confirmUpdateOrderStatus('${id}', '${nextStatus}')`);
+}
+
+async function confirmUpdateOrderStatus(id, status) {
+  try {
+    await mockApi.updateOrderStatus(id, status);
+    showToast(`Order status updated to ${status}`, 'success');
+    loadOrdersTable();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+function exportOrders() {
+  const csv = 'Order ID,Customer,Date,Total,Status,Items\n' + 
+    AppState.data.orders.map(o => `${o.id},${o.customerName},${o.createdAt},${o.total},${o.status},${o.items.length}`).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'orders.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Orders exported successfully', 'success');
+}
+
+// ==================== SETTINGS PAGE ====================
+function renderSettings() {
+  const user = AppState.auth.user || {};
+  return `
+    <div class="space-y-6 max-w-4xl">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Settings</h1>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Manage your account and preferences</p>
+      </div>
+
+      <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div class="flex border-b border-slate-200 dark:border-slate-700 overflow-x-auto">
+          <button onclick="switchSettingsTab('profile')" id="tab-profile" class="px-6 py-3 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400 transition-colors whitespace-nowrap">Profile</button>
+          <button onclick="switchSettingsTab('security')" id="tab-security" class="px-6 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors whitespace-nowrap">Security</button>
+          <button onclick="switchSettingsTab('appearance')" id="tab-appearance" class="px-6 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors whitespace-nowrap">Appearance</button>
+          <button onclick="switchSettingsTab('notifications')" id="tab-notifications" class="px-6 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors whitespace-nowrap">Notifications</button>
+        </div>
+
+        <div id="settingsContent" class="p-6">
+          ${renderProfileSettings(user)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function switchSettingsTab(tab) {
+  document.querySelectorAll('[id^="tab-"]').forEach(el => {
+    el.classList.remove('border-indigo-500', 'text-indigo-600', 'dark:text-indigo-400');
+    el.classList.add('border-transparent', 'text-slate-500', 'dark:text-slate-400');
+  });
+  document.getElementById('tab-' + tab).classList.remove('border-transparent', 'text-slate-500', 'dark:text-slate-400');
+  document.getElementById('tab-' + tab).classList.add('border-indigo-500', 'text-indigo-600', 'dark:text-indigo-400');
+
+  const user = AppState.auth.user || {};
+  const content = document.getElementById('settingsContent');
+  if (tab === 'profile') content.innerHTML = renderProfileSettings(user);
+  else if (tab === 'security') content.innerHTML = renderSecuritySettings();
+  else if (tab === 'appearance') content.innerHTML = renderAppearanceSettings();
+  else if (tab === 'notifications') content.innerHTML = renderNotificationSettings();
+  if (window.lucide) lucide.createIcons();
+}
+
+function renderProfileSettings(user) {
+  return `
+    <div class="space-y-6">
+      <div class="flex items-center gap-4">
+        <img src="${user.avatar || 'https://api.dicebear.com/9.x/avataaars/svg?seed=default'}" alt="${user.name}" class="w-20 h-20 rounded-full bg-slate-200 dark:bg-slate-700 object-cover">
+        <div>
+          <button class="px-4 py-2 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium rounded-lg transition-colors">Change Avatar</button>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">JPG, PNG or GIF. Max 2MB.</p>
+        </div>
+      </div>
+
+      <form id="profileForm" onsubmit="saveProfile(event)" class="space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Full Name</label>
+            <input type="text" id="profileName" value="${user.name || ''}" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email</label>
+            <input type="email" id="profileEmail" value="${user.email || ''}" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Bio</label>
+          <textarea id="profileBio" rows="3" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none resize-none">${user.bio || ''}</textarea>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Brief description for your profile. Max 500 characters.</p>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Timezone</label>
+            <select id="profileTimezone" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+              ${timezones.map(tz => `<option value="${tz}" ${user.timezone === tz ? 'selected' : ''}>${tz}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Language</label>
+            <select id="profileLanguage" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+              <option value="en" selected>English</option>
+              <option value="es">Spanish</option>
+              <option value="fr">French</option>
+              <option value="de">German</option>
+              <option value="ja">Japanese</option>
+            </select>
+          </div>
+        </div>
+        <div class="flex justify-end">
+          <button type="submit" id="saveProfileBtn" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2">
+            <span>Save Changes</span>
+            <i data-lucide="check" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </form>
+    </div>
+  `;
+}
+
+async function saveProfile(e) {
+  e.preventDefault();
+  const btn = document.getElementById('saveProfileBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Saving...</span>';
+  if (window.lucide) lucide.createIcons();
+
+  await mockApi.delay(500);
+
+  if (AppState.auth.user) {
+    AppState.auth.user.name = document.getElementById('profileName').value;
+    AppState.auth.user.email = document.getElementById('profileEmail').value;
+    AppState.auth.user.bio = document.getElementById('profileBio').value;
+    AppState.auth.user.timezone = document.getElementById('profileTimezone').value;
+  }
+
+  showToast('Profile updated successfully', 'success');
+  btn.disabled = false;
+  btn.innerHTML = '<span>Save Changes</span><i data-lucide="check" class="w-4 h-4"></i>';
+  if (window.lucide) lucide.createIcons();
+}
+
+function renderSecuritySettings() {
+  return `
+    <div class="space-y-6">
+      <div>
+        <h4 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Change Password</h4>
+        <form id="passwordForm" onsubmit="changePassword(event)" class="space-y-4 max-w-md">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Current Password</label>
+            <div class="relative">
+              <input type="password" id="currentPassword" required class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none pr-10">
+              <button type="button" onclick="togglePassword('currentPassword')" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <i data-lucide="eye" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">New Password</label>
+            <div class="relative">
+              <input type="password" id="newPassword" required class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none pr-10" oninput="updatePasswordStrength(this.value)">
+              <button type="button" onclick="togglePassword('newPassword')" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <i data-lucide="eye" class="w-4 h-4"></i>
+              </button>
+            </div>
+            <div class="mt-1.5 h-1 bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
+              <div id="passwordStrength" class="h-full w-0 transition-all duration-300"></div>
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Confirm New Password</label>
+            <input type="password" id="confirmNewPassword" required class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          </div>
+          <button type="submit" id="changePasswordBtn" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors">Update Password</button>
+        </form>
+      </div>
+
+      <div class="border-t border-slate-200 dark:border-slate-700 pt-6">
+        <h4 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Two-Factor Authentication</h4>
+        <div class="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+          <div>
+            <p class="text-sm font-medium text-slate-900 dark:text-white">Authenticator App</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Use an authenticator app to generate codes</p>
+          </div>
+          <button onclick="showToast('2FA setup coming soon', 'info')" class="px-4 py-2 border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 text-sm font-medium rounded-lg transition-colors">Enable</button>
+        </div>
+      </div>
+
+      <div class="border-t border-slate-200 dark:border-slate-700 pt-6">
+        <h4 class="text-lg font-medium text-rose-600 dark:text-rose-400 mb-4">Danger Zone</h4>
+        <div class="p-4 border border-rose-200 dark:border-rose-900/50 rounded-lg bg-rose-50 dark:bg-rose-900/10">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-rose-900 dark:text-rose-300">Delete Account</p>
+              <p class="text-xs text-rose-600 dark:text-rose-400 mt-0.5">Permanently delete your account and all data</p>
+            </div>
+            <button onclick="confirmDeleteAccount()" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium rounded-lg transition-colors">Delete</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function changePassword(e) {
+  e.preventDefault();
+  const current = document.getElementById('currentPassword').value;
+  const newPass = document.getElementById('newPassword').value;
+  const confirm = document.getElementById('confirmNewPassword').value;
+
+  if (newPass !== confirm) { showToast('Passwords do not match', 'error'); return; }
+  if (current.length < 6) { showToast('Current password is incorrect', 'error'); return; }
+
+  const btn = document.getElementById('changePasswordBtn');
+  btn.disabled = true;
+  btn.textContent = 'Updating...';
+  await mockApi.delay(500);
+  showToast('Password updated successfully', 'success');
+  btn.disabled = false;
+  btn.textContent = 'Update Password';
+  document.getElementById('passwordForm').reset();
+}
+
+function confirmDeleteAccount() {
+  showModal('Delete Account', `
+    <div class="text-center">
+      <div class="w-12 h-12 bg-rose-100 dark:bg-rose-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+        <i data-lucide="alert-triangle" class="w-6 h-6 text-rose-600 dark:text-rose-400"></i>
+      </div>
+      <h4 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">Are you absolutely sure?</h4>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">This action cannot be undone. All your data will be permanently deleted.</p>
+      <div class="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg text-left">
+        <label class="flex items-start gap-2">
+          <input type="checkbox" id="confirmDelete" class="mt-0.5 w-4 h-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500">
+          <span class="text-sm text-slate-700 dark:text-slate-300">I understand that this action is permanent and cannot be reversed</span>
+        </label>
+      </div>
+    </div>
+  `, `deleteAccount()`);
+}
+
+function deleteAccount() {
+  if (!document.getElementById('confirmDelete').checked) {
+    showToast('Please confirm the deletion', 'error');
+    return;
+  }
+  logout();
+  showToast('Account deleted', 'info');
+}
+
+function renderAppearanceSettings() {
+  const themes = [
+    { id: 'light', label: 'Light', icon: 'sun', desc: 'Always use light mode' },
+    { id: 'dark', label: 'Dark', icon: 'moon', desc: 'Always use dark mode' },
+    { id: 'system', label: 'System', icon: 'monitor', desc: 'Follow system preference' }
+  ];
+  const densities = [
+    { id: 'compact', label: 'Compact', desc: 'Tight spacing, more content' },
+    { id: 'comfortable', label: 'Comfortable', desc: 'Balanced spacing' },
+    { id: 'spacious', label: 'Spacious', desc: 'More breathing room' }
+  ];
+  const accents = [
+    { color: '#4f46e5', label: 'Indigo' },
+    { color: '#3b82f6', label: 'Blue' },
+    { color: '#10b981', label: 'Emerald' },
+    { color: '#f59e0b', label: 'Amber' },
+    { color: '#ef4444', label: 'Rose' },
+    { color: '#8b5cf6', label: 'Violet' }
+  ];
+
+  return `
+    <div class="space-y-8">
+      <div>
+        <h4 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Theme</h4>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          ${themes.map(t => `
+            <button onclick="setTheme('${t.id}')" class="p-4 border-2 rounded-xl transition-all text-left ${AppState.theme.mode === t.id ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'}">
+              <i data-lucide="${t.icon}" class="w-5 h-5 ${AppState.theme.mode === t.id ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400'} mb-2"></i>
+              <p class="text-sm font-medium text-slate-900 dark:text-white">${t.label}</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">${t.desc}</p>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="border-t border-slate-200 dark:border-slate-700 pt-6">
+        <h4 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Density</h4>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          ${densities.map(d => `
+            <button onclick="setDensity('${d.id}')" class="p-4 border-2 rounded-xl transition-all text-left ${AppState.theme.density === d.id ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'}">
+              <p class="text-sm font-medium text-slate-900 dark:text-white">${d.label}</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">${d.desc}</p>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="border-t border-slate-200 dark:border-slate-700 pt-6">
+        <h4 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Accent Color</h4>
+        <div class="flex flex-wrap gap-3">
+          ${accents.map(a => `
+            <button onclick="setAccentColor('${a.color}')" class="w-12 h-12 rounded-full border-2 transition-all ${AppState.theme.accentColor === a.color ? 'border-slate-900 dark:border-white scale-110' : 'border-transparent hover:scale-105'}" style="background-color: ${a.color}" title="${a.label}"></button>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="border-t border-slate-200 dark:border-slate-700 pt-6">
+        <h4 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Accessibility</h4>
+        <div class="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+          <div>
+            <p class="text-sm font-medium text-slate-900 dark:text-white">Reduced Motion</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Minimize animations and transitions</p>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="reducedMotion" class="sr-only peer" onchange="toggleReducedMotion(this.checked)">
+            <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:after:border-slate-600 peer-checked:bg-indigo-600"></div>
+          </label>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function setTheme(mode) {
+  AppState.theme.mode = mode;
+  localStorage.setItem('theme', mode);
+  updateTheme();
+  switchSettingsTab('appearance');
+  showToast(`Theme set to ${mode}`, 'success');
+}
+
+function setDensity(density) {
+  AppState.theme.density = density;
+  showToast(`Density set to ${density}`, 'success');
+}
+
+function setAccentColor(color) {
+  AppState.theme.accentColor = color;
+  showToast('Accent color updated', 'success');
+}
+
+function toggleReducedMotion(checked) {
+  document.documentElement.style.setProperty('--reduce-motion', checked ? 'reduce' : 'no-preference');
+  showToast(checked ? 'Reduced motion enabled' : 'Reduced motion disabled', 'info');
+}
+
+function renderNotificationSettings() {
+  const channels = [
+    { id: 'email', label: 'Email Notifications', desc: 'Receive updates via email', icon: 'mail' },
+    { id: 'push', label: 'Push Notifications', desc: 'Browser push notifications', icon: 'bell' },
+    { id: 'inapp', label: 'In-App Notifications', desc: 'Show notifications within the app', icon: 'smartphone' }
+  ];
+  const categories = [
+    { id: 'account', label: 'Account Activity', desc: 'Logins, password changes, security alerts' },
+    { id: 'users', label: 'New Users', desc: 'When new users sign up' },
+    { id: 'orders', label: 'Order Updates', desc: 'New orders, status changes, refunds' },
+    { id: 'system', label: 'System Alerts', desc: 'Maintenance, downtime, performance issues' },
+    { id: 'marketing', label: 'Marketing', desc: 'Product updates, tips, and promotional content' }
+  ];
+
+  return `
+    <div class="space-y-8">
+      <div>
+        <h4 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Notification Channels</h4>
+        <div class="space-y-3">
+          ${channels.map(c => `
+            <div class="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-white dark:bg-slate-600 flex items-center justify-center">
+                  <i data-lucide="${c.icon}" class="w-5 h-5 text-slate-500 dark:text-slate-400"></i>
+                </div>
+                <div>
+                  <p class="text-sm font-medium text-slate-900 dark:text-white">${c.label}</p>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">${c.desc}</p>
+                </div>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" class="sr-only peer" checked>
+                <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:after:border-slate-600 peer-checked:bg-indigo-600"></div>
+              </label>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="border-t border-slate-200 dark:border-slate-700 pt-6">
+        <h4 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Notification Categories</h4>
+        <div class="space-y-3">
+          ${categories.map(c => `
+            <div class="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+              <div>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">${c.label}</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">${c.desc}</p>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" class="sr-only peer" ${c.id !== 'marketing' ? 'checked' : ''}>
+                <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:after:border-slate-600 peer-checked:bg-indigo-600"></div>
+              </label>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ==================== PAGE INITIALIZATION ====================
+function initPageScripts(page) {
+  if (page === 'dashboard') {
+    setTimeout(() => loadDashboardData(), 100);
+  } else if (page === 'analytics') {
+    setTimeout(() => initAnalyticsCharts(), 100);
+  } else if (page === 'users') {
+    setTimeout(() => loadUsersTable(), 100);
+  } else if (page === 'products') {
+    setTimeout(() => loadProductsTable(), 100);
+  } else if (page === 'orders') {
+    setTimeout(() => loadOrdersTable(), 100);
+  }
+}
+
+// ==================== APP INITIALIZATION ====================
+document.addEventListener('DOMContentLoaded', () => {
+  const savedTheme = localStorage.getItem('theme') || 'system';
+  AppState.theme.mode = savedTheme;
+  updateTheme();
+
+  if (checkAuth()) {
+    navigateTo('dashboard');
+  } else {
+    navigateTo('login');
+  }
+
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (AppState.theme.mode === 'system') updateTheme();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      showToast('Search coming soon', 'info');
+    }
+    if (e.key === 'Escape') {
+      closeModal();
+      AppState.ui.notificationsOpen = false;
+      if (AppState.ui.currentPage !== 'login' && AppState.ui.currentPage !== 'signup' && AppState.ui.currentPage !== 'reset') {
+        navigateTo(AppState.ui.currentPage);
+      }
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (AppState.ui.notificationsOpen) {
+      const dropdown = e.target.closest('.relative');
+      if (!dropdown) {
+        AppState.ui.notificationsOpen = false;
+        if (AppState.ui.currentPage !== 'login' && AppState.ui.currentPage !== 'signup' && AppState.ui.currentPage !== 'reset') {
+          navigateTo(AppState.ui.currentPage);
+        }
+      }
+    }
+  });
+});
+
+// Handle browser back/forward buttons
+window.addEventListener('popstate', () => {
+  // Hash-based routing handled by navigateTo
+});
+</script>
+</body>
+</html>
